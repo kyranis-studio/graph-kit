@@ -2,9 +2,9 @@
 
 ## Product Requirements Document (PRD)
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Date:** May 4, 2026  
-**Status:** Draft
+**Status:** Updated
 
 ---
 
@@ -12,11 +12,14 @@
 
 GraphKit is a lightweight, TypeScript-first library for building node graph applications in Deno 2. It provides the computational layer for creating, connecting, and executing node-based workflows, with primary focus on AI workflows while remaining general-purpose.
 
+**Companion AI Inference Library**: GraphKit is accompanied by `@graph-kit/ai`, a lightweight Deno 2 library for abstracting AI model inference. It prioritizes local providers (Ollama) with support for online APIs (OpenAI-compatible endpoints), and provides pre-built GraphKit node types for seamless integration.
+
 ### 1.1 Inspiration
 
 - **LangGraph**: State-based execution, conditional edges, cycles support
 - **statelyai/graph**: Plain JSON graphs, port system for node-editor style graphs
 - **@codemix/graph**: Type-safe graph database patterns
+- **Ollama**: Local LLM inference patterns
 
 ---
 
@@ -28,6 +31,7 @@ GraphKit is a lightweight, TypeScript-first library for building node graph appl
 - Nodes are typed units with unique identifiers
 - Each node has a type, inputs, outputs, and execution logic
 - Nodes can be created dynamically or from registered types
+- Pre-built nodes available via `@graph-kit/ai` for AI workflows
 
 ```typescript
 interface Node {
@@ -119,8 +123,8 @@ interface Graph {
 - `removeEdge(edgeId)`: Remove an edge
 - `getNode(nodeId)`: Retrieve a node
 - `getEdgesForNode(nodeId)`: Get all edges connected to a node
-- `getIncomers(nodeId)`: Get nodes that feed into a node
-- `getOutgoers(nodeId)`: Get nodes that receive data from a node
+- `getPredecessors(nodeId)`: Get nodes that feed into a node
+- `getSuccessors(nodeId)`: Get nodes that receive data from a node
 
 ### 2.4 Execution Engine
 
@@ -128,6 +132,7 @@ interface Graph {
 - Nodes define an `execute` function
 - Function receives input values and returns output values
 - Support for async execution
+- `@graph-kit/ai` provides pre-implemented executors for AI nodes
 
 ```typescript
 type NodeExecutor<TInput = unknown, TOutput = unknown> = (
@@ -203,40 +208,21 @@ interface StateStore {
 
 ```typescript
 import { GraphKit } from '@graph-kit/core';
+import { registerOllamaNodes } from '@graph-kit/ai';
 
 // Create a new graph
 const graph = GraphKit.createGraph({ name: 'My Workflow' });
 
-// Register node types
-graph.registerNodeType('llm-call', {
-  inputs: [
-    { id: 'prompt', name: 'Prompt', type: 'string', required: true },
-    { id: 'model', name: 'Model', type: 'string', default: 'gpt-4' }
-  ],
-  outputs: [
-    { id: 'response', name: 'Response', type: 'string' }
-  ],
-  execute: async (inputs) => {
-    const response = await callLLM(inputs.prompt, inputs.model);
-    return { response };
-  }
-});
+// Register AI nodes from @graph-kit/ai (no custom executor code needed)
+registerOllamaNodes(graph);
 
-// Create nodes
-const node1 = graph.addNode('llm-call', { 
-  data: { prompt: 'Hello, world!' } 
-});
-
-const node2 = graph.addNode('llm-call', {
-  data: { prompt: 'Follow up question' }
-});
-
-// Connect nodes
-graph.addEdge({
-  sourceNodeId: node1.id,
-  sourcePortId: 'response',
-  targetNodeId: node2.id,
-  targetPortId: 'prompt'
+// Create AI nodes directly
+const node1 = graph.addNode('ollama-chat', { 
+  data: { 
+    model: 'llama3',
+    prompt: 'Hello, world!',
+    temperature: 0.7
+  } 
 });
 ```
 
@@ -366,15 +352,29 @@ const dot = graph.toDOT();
 
 ---
 
+
+
 ## 6. Project Structure
 
 ```
 graph-kit/
-├── mod.ts                  # Main entry point
+├── mod.ts                  # Main entry point (@graph-kit/core)
+├── ai/                     # @graph-kit/ai inference library
+│   ├── mod.ts              # AI library entry
+│   ├── providers/          # Provider implementations
+│   │   ├── base.ts         # Base provider interface
+│   │   ├── ollama.ts       # Ollama local provider
+│   │   ├── openai.ts       # OpenAI-compatible provider
+│   │   └── types.ts        # Provider types
+│   ├── nodes/              # Pre-built GraphKit nodes
+│   │   ├── ollama-chat.ts
+│   │   ├── openai-chat.ts
+│   │   └── ai-embedding.ts
+│   └── tests/
 ├── deno.json              # Deno configuration
 ├── PRD.md                 # This file
 ├── README.md              # Documentation
-├── src/
+├── src/                   # Core GraphKit source
 │   ├── core/
 │   │   ├── graph.ts       # Graph class
 │   │   ├── node.ts        # Node class
@@ -393,7 +393,7 @@ graph-kit/
 │   └── utils/
 │       ├── serialization.ts
 │       └── export.ts      # Mermaid, DOT export
-├── tests/
+├── tests/                 # Core tests
 │   ├── graph_test.ts
 │   ├── node_test.ts
 │   ├── execution_test.ts
@@ -408,7 +408,7 @@ graph-kit/
 
 ## 7. Usage Examples
 
-### 7.1 Basic Node Graph
+### 8.1 Basic Node Graph
 
 ```typescript
 import { GraphKit } from '@graph-kit/core';
@@ -447,37 +447,49 @@ const result = await graph.execute();
 console.log(result.values); // { result: 18 } (8 + 10)
 ```
 
-### 7.2 AI Workflow
+### 8.2 AI Workflow (RAG Pipeline)
 
 ```typescript
 import { GraphKit } from '@graph-kit/core';
+import { registerOllamaNodes, registerOpenAINodes } from '@graph-kit/ai';
 
 const workflow = GraphKit.createWorkflow({
   name: 'RAG Pipeline'
 });
 
+// Register AI nodes
+registerOllamaNodes(workflow);
+registerOpenAINodes(workflow);
+
 // Nodes
-workflow.addNode('rewrite-query', {
-  type: 'llm',
-  config: { systemPrompt: 'Rewrite for better retrieval...' }
+workflow.addNode('ollama-chat', {
+  id: 'rewrite-query',
+  data: { 
+    model: 'llama3',
+    systemPrompt: 'Rewrite for better retrieval...' 
+  }
 });
 
 workflow.addNode('retrieve', {
+  id: 'retrieve',
   type: 'vector-search',
   config: { topK: 5 }
 });
 
-workflow.addNode('generate', {
-  type: 'llm',
-  config: { systemPrompt: 'Answer using context...' }
+workflow.addNode('openai-chat', {
+  id: 'generate',
+  data: { 
+    model: 'gpt-4',
+    systemPrompt: 'Answer using context...' 
+  }
 });
 
 // Connections
 workflow
-  .connect('rewrite-query.output', 'retrieve.query')
+  .connect('START', 'rewrite-query.input')
+  .connect('rewrite-query.response', 'retrieve.query')
   .connect('retrieve.documents', 'generate.context')
-  .connect('rewrite-query.input', 'START')
-  .connect('generate.output', 'END');
+  .connect('generate.response', 'END');
 
 // Run
 const result = await workflow.run({
@@ -485,10 +497,39 @@ const result = await workflow.run({
 });
 ```
 
+### 8.3 Local Ollama Integration
+
+```typescript
+import { GraphKit } from '@graph-kit/core';
+import { registerOllamaNodes } from '@graph-kit/ai';
+
+const graph = GraphKit.createGraph({ name: 'Local AI Workflow' });
+
+// Register Ollama nodes
+registerOllamaNodes(graph);
+
+// Add Ollama chat node
+const chatNode = graph.addNode('ollama-chat', {
+  data: {
+    model: 'llama3',
+    prompt: 'Explain Deno 2 in simple terms',
+    temperature: 0.5,
+    maxTokens: 500
+  }
+});
+
+// Execute with local Ollama
+const result = await graph.execute();
+console.log(result.values.get('response'));
+```
+
 ---
+
+
 
 ## 8. Future Considerations
 
+### Core GraphKit
 - Visual editor integration (React Flow, Vue Flow bindings)
 - Real-time collaboration (CRDT support)
 - Distributed execution
@@ -496,3 +537,75 @@ const result = await workflow.run({
 - Debugging tools (step-through execution, state inspection)
 - Metrics and observability
 - Web Worker support for heavy computations
+
+### AI Inference Library
+- More local providers (LM Studio, GPT4All, MLC-LLM)
+- Multimodal support (image/audio inputs)
+- Automatic Ollama model downloading
+- Cost tracking for online APIs
+- Batch inference support
+- Fine-tuning workflow nodes
+- Embedding similarity search nodes
+- Tool calling UI integration
+
+---
+
+## 9. AI Inference Library Specification (@graph-kit/ai)
+
+### 11.1 Overview
+Lightweight, zero-bloat AI model inference abstraction for Deno 2 that integrates seamlessly with GraphKit.
+
+### 11.2 Supported Providers
+| Provider | Type | Features |
+|----------|------|----------|
+| Ollama | Local | Chat, Completions, Embeddings, Streaming |
+| OpenAI | Online | Chat, Completions, Embeddings, Tool Calling |
+| Groq | Online | Fast inference, Chat, Completions |
+| OpenRouter | Online | Multi-model access |
+
+### 11.3 Core Features
+- Unified `ChatModel` interface for all providers
+- Type-safe request/response objects
+- Streaming support (Server-Sent Events)
+- Tool/function calling for agent workflows
+- Embeddings generation
+- Model listing and capability detection
+- Minimal dependencies (uses Deno's built-in fetch)
+
+### 11.4 Integration with GraphKit
+- Exports pre-built node types: `ollama-chat`, `openai-chat`, `ai-embedding`
+- Nodes automatically conform to GraphKit's port system:
+  - Inputs: `prompt`, `model`, `temperature`, `systemPrompt`
+  - Outputs: `response`, `tokens`, `usage`
+- No custom `execute` functions required
+- Works with all GraphKit execution modes
+
+### 11.5 AI Library API
+
+```typescript
+import { createOllamaProvider } from '@graph-kit/ai/providers/ollama';
+import { ChatModel } from '@graph-kit/ai';
+
+// Create Ollama provider
+const ollama = createOllamaProvider({
+  baseUrl: 'http://localhost:11434'
+});
+
+// Use directly (without GraphKit)
+const response = await ollama.chat({
+  model: 'llama3',
+  messages: [{ role: 'user', content: 'Hello!' }],
+  stream: false
+});
+
+// Or get GraphKit node type
+const ollamaChatNode = ollama.getGraphKitNodeType();
+```
+
+### 11.6 Non-Functional Requirements
+- Deno 2 native, no Node.js dependencies
+- Minimal footprint: <50KB gzipped
+- Works with Deno permissions: `--allow-net` (for Ollama and online APIs)
+- No external dependencies beyond standard library
+- Full TypeScript strict mode support
+- Comprehensive error handling for network failures
