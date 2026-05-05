@@ -21,7 +21,7 @@ const chatNode = graph.addNode("ollama-chat", {
 
 console.log("Executing AI workflow...");
 console.log("Make sure Ollama is running with: ollama serve");
-console.log("And that llama3 model is pulled with: ollama pull llama3");
+console.log("And ehe model is pulled with: ollama pull <model>");
 
 try {
   const result = await graph.execute();

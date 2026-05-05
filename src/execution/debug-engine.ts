@@ -1,6 +1,60 @@
 import type { Graph, GraphState, ExecutionContext } from '../types/index.ts';
 import { topologicalSort } from '../algorithms/sorting.ts';
 
+const Colors = {
+  reset: '\x1b[0m',
+  bold: '\x1b[1m',
+  dim: '\x1b[2m',
+  italic: '\x1b[3m',
+  underline: '\x1b[4m',
+  
+  black: '\x1b[30m',
+  red: '\x1b[31m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  blue: '\x1b[34m',
+  magenta: '\x1b[35m',
+  cyan: '\x1b[36m',
+  white: '\x1b[37m',
+  gray: '\x1b[90m',
+  brightBlue: '\x1b[94m',
+  brightGreen: '\x1b[92m',
+  brightYellow: '\x1b[93m',
+  brightRed: '\x1b[91m',
+  brightMagenta: '\x1b[95m',
+  brightCyan: '\x1b[96m',
+
+  bgDarkBlue: '\x1b[44m',
+  bgDarkGreen: '\x1b[42m',
+  bgDarkRed: '\x1b[41m',
+  bgDarkYellow: '\x1b[43m',
+
+  line: '─',
+  arrow: '▸',
+  bullet: '●',
+  check: '✓',
+  cross: '✗',
+  warn: '⚠',
+  dot: '·',
+};
+
+function color(text: string, colorCode: string): string {
+  return `${colorCode}${text}${Colors.reset}`;
+}
+
+function bold(text: string): string {
+  return `${Colors.bold}${text}${Colors.reset}`;
+}
+
+function dim(text: string): string {
+  return `${Colors.dim}${text}${Colors.reset}`;
+}
+
+function box(label: string, content: string, colorCode: string): string {
+  const border = color(Colors.line.repeat(50), colorCode);
+  return `\n${border}\n${bold(color(` ${label}`, colorCode))}\n${border}\n${content}`;
+}
+
 export interface NodeDebugInfo {
   nodeId: string;
   nodeType: string;
@@ -14,24 +68,40 @@ export interface NodeDebugInfo {
   successors: string[];
 }
 
+export interface StreamDebugState {
+  nodeId: string;
+  state: {
+    response: string;
+    thinking?: string;
+    done: boolean;
+  };
+}
+
 export class DebugExecutionEngine {
   #cancelled = false;
   #stepMode: boolean;
   #executionLog: NodeDebugInfo[] = [];
+  #streamState: Map<string, { response: string; thinking?: string; done: boolean }> = new Map();
+  #lastThinkingLength: Map<string, number> = new Map();
+  #lastResponseLength: Map<string, number> = new Map();
   #onNodeStart?: (info: NodeDebugInfo) => void;
   #onNodeComplete?: (info: NodeDebugInfo) => void;
   #onNodeError?: (info: NodeDebugInfo) => void;
+  #onStreamChunk?: (state: StreamDebugState) => void;
+  #streamStarted: Map<string, { thinking: boolean; response: boolean }> = new Map();
 
   constructor(config?: {
     stepMode?: boolean;
     onNodeStart?: (info: NodeDebugInfo) => void;
     onNodeComplete?: (info: NodeDebugInfo) => void;
     onNodeError?: (info: NodeDebugInfo) => void;
+    onStreamChunk?: (state: StreamDebugState) => void;
   }) {
     this.#stepMode = config?.stepMode ?? false;
     this.#onNodeStart = config?.onNodeStart;
     this.#onNodeComplete = config?.onNodeComplete;
     this.#onNodeError = config?.onNodeError;
+    this.#onStreamChunk = config?.onStreamChunk;
   }
 
   get executionLog(): ReadonlyArray<NodeDebugInfo> {
@@ -49,6 +119,10 @@ export class DebugExecutionEngine {
   reset(): void {
     this.#cancelled = false;
     this.#executionLog = [];
+    this.#streamState.clear();
+    this.#lastThinkingLength.clear();
+    this.#lastResponseLength.clear();
+    this.#streamStarted.clear();
   }
 
   async execute(graph: Graph, initialState?: GraphState): Promise<GraphState> {
@@ -56,18 +130,22 @@ export class DebugExecutionEngine {
     const state: GraphState = initialState || { values: new Map(), messages: [] };
     const sortedNodes = topologicalSort(graph);
 
-    console.log('\n=== Graph Execution Debug Mode ===');
-    console.log(`Total nodes: ${sortedNodes.length}`);
-    console.log(`Execution order: ${sortedNodes.join(' -> ')}`);
-    console.log('Press SPACE to execute next node, ESC to cancel\n');
+    graph.on('llmStreamChunk', (data: unknown) => {
+      const chunk = data as StreamDebugState;
+      this.#streamState.set(chunk.nodeId, chunk.state);
+      this.#onStreamChunk?.(chunk);
+      this.#printStreamChunk(chunk);
+    });
 
-    for (const nodeId of sortedNodes) {
+    this.#printHeader(sortedNodes);
+
+    for (let i = 0; i < sortedNodes.length; i++) {
       if (this.#cancelled) {
-        console.log('\n⚠ Execution cancelled by user');
-        console.log(`Completed ${this.#executionLog.filter(n => n.status === 'completed').length}/${sortedNodes.length} nodes\n`);
+        this.#printCancel(sortedNodes.length);
         break;
       }
 
+      const nodeId = sortedNodes[i];
       const node = graph.getNode(nodeId)!;
       const debugInfo: NodeDebugInfo = {
         nodeId,
@@ -96,7 +174,7 @@ export class DebugExecutionEngine {
       this.#executionLog.push(debugInfo);
       this.#onNodeStart?.(debugInfo);
 
-      this.#printNodeStart(debugInfo);
+      this.#printNodeStart(debugInfo, i, sortedNodes.length);
 
       const startTime = performance.now();
 
@@ -124,6 +202,11 @@ export class DebugExecutionEngine {
         debugInfo.status = 'completed';
         debugInfo.duration = performance.now() - startTime;
 
+        const streamInfo = this.#streamState.get(nodeId);
+        if (streamInfo) {
+          this.#printStreamSummary(streamInfo);
+        }
+
         graph.emit('nodeComplete', { nodeId, output: debugInfo.output, inputs: debugInfo.inputs });
         this.#onNodeComplete?.(debugInfo);
         this.#printNodeComplete(debugInfo);
@@ -144,59 +227,156 @@ export class DebugExecutionEngine {
     return state;
   }
 
-  #printNodeStart(info: NodeDebugInfo): void {
-    console.log('\n─────────────────────────────────────────');
-    console.log(`▶ Executing: ${info.nodeId}`);
-    console.log(`  Type: ${info.nodeType}`);
-    if (info.label) console.log(`  Label: ${info.label}`);
-    console.log(`  Predecessors: ${info.predecessors.length > 0 ? info.predecessors.join(', ') : 'none'}`);
-    console.log(`  Successors: ${info.successors.length > 0 ? info.successors.join(', ') : 'none'}`);
-    console.log(`  Inputs:`);
-    for (const [key, value] of Object.entries(info.inputs)) {
-      console.log(`    ${key}: ${this.#formatValue(value)}`);
+  #printHeader(sortedNodes: string[]): void {
+    const title = color(' GRAPHKIT DEBUG EXECUTION ', Colors.bold + Colors.bgDarkBlue + Colors.white);
+    const nodesInfo = dim(`Nodes: ${sortedNodes.length}`);
+    const order = color('Order:', Colors.dim) + ' ' + sortedNodes.map((id, i) => 
+      color(id, i === 0 ? Colors.green : i === sortedNodes.length - 1 ? Colors.brightMagenta : Colors.blue)
+    ).join(color(' → ', Colors.dim));
+    
+    console.log(`\n${title}\n`);
+    console.log(`  ${nodesInfo}`);
+    console.log(`  ${order}\n`);
+    if (this.#stepMode) {
+      console.log(`  ${color('[SPACE]', Colors.bold + Colors.yellow)} continue  ${color('[ESC]', Colors.bold + Colors.red)} cancel\n`);
+    }
+    console.log(color(Colors.line.repeat(50), Colors.dim));
+  }
+
+  #printNodeStart(info: NodeDebugInfo, index: number, total: number): void {
+    const progress = `[${index + 1}/${total}]`;
+    const nodeIcon = color(Colors.bullet, Colors.blue);
+    const nodeIdText = bold(color(info.nodeId, Colors.brightCyan));
+    const typeText = dim(`(${info.nodeType})`);
+    const labelText = info.label ? color(` "${info.label}"`, Colors.yellow) : '';
+    
+    console.log(`\n${nodeIcon} ${progress} ${nodeIdText} ${typeText}${labelText}`);
+    console.log(color(Colors.line.repeat(48), Colors.dim));
+
+    if (info.predecessors.length > 0) {
+      console.log(`  ${color('↑ from:', Colors.dim)} ${info.predecessors.map(id => color(id, Colors.green)).join(', ')}`);
+    }
+    if (info.successors.length > 0) {
+      console.log(`  ${color('↓ to:', Colors.dim)} ${info.successors.map(id => color(id, Colors.brightMagenta)).join(', ')}`);
+    }
+
+    if (Object.keys(info.inputs).length > 0) {
+      console.log(`  ${color('Inputs:', Colors.dim)}`);
+      for (const [key, value] of Object.entries(info.inputs)) {
+        const valueStr = this.#formatValue(value);
+        const preview = valueStr.length > 80 ? valueStr.slice(0, 80) + color('...', Colors.dim) : valueStr;
+        console.log(`    ${color(key, Colors.brightBlue)}: ${dim(preview)}`);
+      }
+    }
+    console.log();
+  }
+
+  #printStreamChunk(chunk: StreamDebugState): void {
+    const { nodeId } = chunk;
+    const { thinking, response, done } = chunk.state;
+    
+    if (!this.#streamStarted.has(nodeId)) {
+      this.#streamStarted.set(nodeId, { thinking: false, response: false });
+    }
+    const started = this.#streamStarted.get(nodeId)!;
+    
+    const prevThinkingLen = this.#lastThinkingLength.get(nodeId) || 0;
+    const prevResponseLen = this.#lastResponseLength.get(nodeId) || 0;
+    
+    const newThinking = thinking ? thinking.slice(prevThinkingLen) : '';
+    const newResponse = response.slice(prevResponseLen);
+    
+    if (thinking && newThinking.length > 0) {
+      if (!started.thinking) {
+        Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color('▸ thinking:', Colors.magenta + Colors.dim)} `));
+        started.thinking = true;
+      }
+      Deno.stdout.writeSync(new TextEncoder().encode(color(newThinking, Colors.magenta)));
+      this.#lastThinkingLength.set(nodeId, thinking.length);
+    }
+    
+    if (newResponse.length > 0) {
+      if (!started.response) {
+        Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color('▸ response:', Colors.brightGreen + Colors.dim)} `));
+        started.response = true;
+      }
+      Deno.stdout.writeSync(new TextEncoder().encode(color(newResponse, Colors.brightGreen)));
+      this.#lastResponseLength.set(nodeId, response.length);
+    }
+    
+    if (done) {
+      Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${dim('━ stream complete ━')}\n`));
     }
   }
 
+  #printStreamSummary(streamInfo: { response: string; thinking?: string }): void {
+    const parts: string[] = [];
+    if (streamInfo.thinking) {
+      parts.push(`${color('thinking:', Colors.magenta)} ${streamInfo.thinking.length} chars`);
+    }
+    parts.push(`${color('response:', Colors.brightGreen)} ${streamInfo.response.length} chars`);
+    console.log(`  ${dim(parts.join('  '))}`);
+  }
+
   #printNodeComplete(info: NodeDebugInfo): void {
-    console.log(`  ✓ Completed in ${info.duration!.toFixed(2)}ms`);
-    console.log(`  Outputs:`);
-    if (info.output) {
+    const icon = color(Colors.check, Colors.brightGreen);
+    const time = color(`${info.duration!.toFixed(1)}ms`, Colors.brightYellow);
+    console.log(`  ${icon} ${dim('done in')} ${time}`);
+    
+    if (info.output && Object.keys(info.output).length > 0) {
+      console.log(`  ${color('Outputs:', Colors.dim)}`);
       for (const [key, value] of Object.entries(info.output)) {
-        console.log(`    ${key}: ${this.#formatValue(value)}`);
+        if (key === 'thinking' || key === 'response') continue;
+        const valueStr = this.#formatValue(value);
+        const preview = valueStr.length > 60 ? valueStr.slice(0, 60) + color('...', Colors.dim) : valueStr;
+        console.log(`    ${color(key, Colors.brightBlue)}: ${dim(preview)}`);
       }
     }
   }
 
   #printNodeError(info: NodeDebugInfo): void {
-    console.log(`  ✗ Failed after ${info.duration!.toFixed(2)}ms`);
-    console.log(`  Error: ${info.error}`);
+    const icon = color(Colors.cross, Colors.brightRed);
+    const time = color(`${info.duration!.toFixed(1)}ms`, Colors.brightRed);
+    console.log(`  ${icon} ${dim('failed after')} ${time}`);
+    console.log(`  ${color('Error:', Colors.brightRed)} ${info.error}`);
+  }
+
+  #printCancel(total: number): void {
+    console.log(`\n${color(`${Colors.warn} Execution cancelled`, Colors.brightYellow)}`);
+    console.log(dim(`  Completed ${this.#executionLog.filter(n => n.status === 'completed').length}/${total} nodes\n`));
   }
 
   #printSummary(total: number): void {
     const completed = this.#executionLog.filter(n => n.status === 'completed').length;
     const errors = this.#executionLog.filter(n => n.status === 'error').length;
     const totalDuration = this.#executionLog.reduce((sum, n) => sum + (n.duration ?? 0), 0);
-
-    console.log('\n═════════════════════════════════════════');
-    console.log('Execution Summary');
-    console.log(`  Nodes executed: ${completed}/${total}`);
-    console.log(`  Errors: ${errors}`);
-    console.log(`  Total time: ${totalDuration.toFixed(2)}ms`);
-    if (this.#cancelled) {
-      console.log('  Status: CANCELLED');
-    }
-    console.log('═════════════════════════════════════════\n');
+    
+    const statusColor = errors > 0 ? Colors.brightRed : Colors.brightGreen;
+    const statusText = errors > 0 ? 'FAILED' : this.#cancelled ? 'CANCELLED' : 'SUCCESS';
+    const statusBg = errors > 0 ? Colors.bgDarkRed : Colors.bgDarkGreen;
+    
+    console.log(`\n${color(Colors.line.repeat(50), Colors.dim)}`);
+    console.log(`  ${color(' EXECUTION SUMMARY ', Colors.bold + statusBg + Colors.white)}`);
+    console.log(color(Colors.line.repeat(50), Colors.dim));
+    console.log(`  ${color('Nodes:', Colors.dim)} ${completed}/${total}`);
+    console.log(`  ${color('Errors:', Colors.dim)} ${errors > 0 ? color(String(errors), Colors.brightRed) : color('0', Colors.brightGreen)}`);
+    console.log(`  ${color('Time:', Colors.dim)} ${totalDuration.toFixed(1)}ms`);
+    console.log(`  ${color('Status:', Colors.dim)} ${color(` ${statusText} `, Colors.bold + statusBg + Colors.white)}`);
+    console.log(color(Colors.line.repeat(50), Colors.dim));
+    console.log();
   }
 
   #formatValue(value: unknown): string {
-    if (value === undefined) return 'undefined';
-    if (value === null) return 'null';
-    if (typeof value === 'string') return `"${value}"`;
+    if (value === undefined) return dim('undefined');
+    if (value === null) return dim('null');
+    if (typeof value === 'string') return color(`"${value}"`, Colors.brightGreen);
+    if (typeof value === 'number') return color(String(value), Colors.brightYellow);
+    if (typeof value === 'boolean') return color(String(value), Colors.cyan);
     if (typeof value === 'object') {
       try {
-        return JSON.stringify(value);
+        return dim(JSON.stringify(value));
       } catch {
-        return String(value);
+        return dim(String(value));
       }
     }
     return String(value);

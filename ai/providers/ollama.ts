@@ -1,4 +1,4 @@
-import type { AIProvider, ChatMessage, ChatRequest, ChatResponse } from './types.ts';
+import type { AIProvider, ChatMessage, ChatRequest, ChatResponse, StreamChunk } from './types.ts';
 
 export function createOllamaProvider(config: { baseUrl?: string } = {}) {
   const baseUrl = config.baseUrl || 'http://localhost:11434';
@@ -31,6 +31,74 @@ export function createOllamaProvider(config: { baseUrl?: string } = {}) {
     };
   };
 
+  async function* streamChat(request: ChatRequest): AsyncIterable<StreamChunk> {
+    const messages = request.systemPrompt 
+      ? [{ role: 'system', content: request.systemPrompt }, ...request.messages]
+      : request.messages;
+
+    const response = await fetch(`${baseUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: request.model,
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+        stream: true,
+        options: { temperature: request.temperature, num_predict: request.maxTokens },
+      }),
+    });
+
+    if (!response.ok) throw new Error(`Ollama stream chat failed: ${response.statusText}`);
+    if (!response.body) throw new Error('No response body');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullThinking = '';
+    let fullContent = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const chunk = JSON.parse(line);
+            const isDone = chunk.done ?? false;
+            const usage = isDone ? chunk.usage : undefined;
+
+            // Ollama sends delta chunks - accumulate by concatenating
+            if (chunk.message?.thinking) {
+              fullThinking += chunk.message.thinking;
+            }
+            
+            if (chunk.message?.content) {
+              fullContent += chunk.message.content;
+            }
+
+            yield {
+              delta: chunk.message?.content || '',
+              thinking: chunk.message?.thinking || undefined,
+              done: isDone,
+              fullContent,
+              fullThinking: fullThinking || undefined,
+              usage,
+            };
+          } catch {
+            // Skip malformed JSON lines
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
   const listModels = async (): Promise<string[]> => {
     const response = await fetch(`${baseUrl}/api/tags`);
     if (!response.ok) throw new Error(`Failed to list models: ${response.statusText}`);
@@ -38,5 +106,5 @@ export function createOllamaProvider(config: { baseUrl?: string } = {}) {
     return data.models.map((m: { name: string }) => m.name);
   };
 
-  return { chat, listModels };
+  return { chat, streamChat, listModels };
 }

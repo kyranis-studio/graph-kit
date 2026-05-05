@@ -17,7 +17,17 @@ export interface ChatResponse {
   usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
 }
 
+export interface StreamChunk {
+  delta: string;
+  thinking?: string;
+  done?: boolean;
+  usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+  fullContent?: string;
+  fullThinking?: string;
+}
+
 export interface AIProvider {
   chat(request: ChatRequest): Promise<ChatResponse>;
+  streamChat(request: ChatRequest): AsyncIterable<StreamChunk>;
   listModels(): Promise<string[]>;
 }

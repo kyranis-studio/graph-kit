@@ -1,4 +1,4 @@
-import type { AIProvider, ChatMessage, ChatRequest, ChatResponse } from './types.ts';
+import type { AIProvider, ChatMessage, ChatRequest, ChatResponse, StreamChunk } from './types.ts';
 
 export function createOpenAIProvider(config: { apiKey?: string; baseUrl?: string } = {}) {
   const apiKey = config.apiKey || Deno.env.get('OPENAI_API_KEY');
@@ -40,6 +40,65 @@ export function createOpenAIProvider(config: { apiKey?: string; baseUrl?: string
     };
   };
 
+  async function* streamChat(request: ChatRequest): AsyncIterable<StreamChunk> {
+    const messages = request.systemPrompt 
+      ? [{ role: 'system' as const, content: request.systemPrompt }, ...request.messages]
+      : request.messages;
+
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: request.model,
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+        stream: true,
+        temperature: request.temperature,
+        max_tokens: request.maxTokens,
+      }),
+    });
+
+    if (!response.ok) throw new Error(`OpenAI stream chat failed: ${response.statusText}`);
+    if (!response.body) throw new Error('No response body');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed === 'data: [DONE]') continue;
+          if (!trimmed.startsWith('data: ')) continue;
+
+          try {
+            const chunk = JSON.parse(trimmed.slice(6));
+            const delta = chunk.choices?.[0]?.delta?.content || '';
+            
+            yield {
+              delta,
+              done: chunk.choices?.[0]?.finish_reason !== null && delta === '',
+            };
+          } catch {
+            // Skip malformed JSON lines
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
   const listModels = async (): Promise<string[]> => {
     const response = await fetch(`${baseUrl}/models`, {
       headers: { 'Authorization': `Bearer ${apiKey}` },
@@ -49,5 +108,5 @@ export function createOpenAIProvider(config: { apiKey?: string; baseUrl?: string
     return data.data.map((m: { id: string }) => m.id);
   };
 
-  return { chat, listModels };
+  return { chat, streamChat, listModels };
 }
