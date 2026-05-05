@@ -1,0 +1,16 @@
+{
+  "name": "@graph-kit/core",
+  "version": "1.0.0",
+  "exports": {
+    ".": "./mod.ts",
+    "./ai": "./ai/mod.ts"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "module": "esnext"
+  },
+  "tasks": {
+    "test": "deno test --allow-read tests/",
+    "check": "deno check mod.ts ai/mod.ts"
+  }
+}
