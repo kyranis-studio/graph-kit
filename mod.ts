@@ -26,3 +26,5 @@ export const GraphKit = {
 export type { GraphImpl as Graph } from './src/core/graph.ts';
 export type * from './src/types/index.ts';
 export { registerOllamaNodes, registerOpenAINodes, registerEmbeddingNodes };
+export { DebugExecutionEngine } from './src/execution/debug-engine.ts';
+export type { NodeDebugInfo } from './src/execution/debug-engine.ts';
