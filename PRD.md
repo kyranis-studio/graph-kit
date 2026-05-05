@@ -2,8 +2,8 @@
 
 ## Product Requirements Document (PRD)
 
-**Version:** 1.1  
-**Date:** May 4, 2026  
+**Version:** 1.3  
+**Date:** May 5, 2026  
 **Status:** Updated
 
 ---
@@ -41,6 +41,7 @@ interface Node {
   outputs: Map<string, Port>;
   data: Record<string, unknown>;
   metadata?: NodeMetadata;
+  execute: NodeExecutor;
 }
 
 interface NodeMetadata {
@@ -65,7 +66,7 @@ interface Port {
   type: PortType;
   required: boolean;
   defaultValue?: unknown;
-  schema?: SchemaValidator; // Zod, Valibot, or custom
+  schema?: unknown;
 }
 
 type PortType = 'string' | 'number' | 'boolean' | 'object' | 'array' | 'any' | string;
@@ -155,15 +156,18 @@ interface ExecutionContext {
 - Wait for all inputs to be available
 - Support for parallel execution of independent nodes
 
-**Event-Driven Execution**:
-- Nodes trigger execution when inputs arrive
-- Support for cycles and loops
+**Debug Execution**:
+- Interactive step-through mode (using `stepMode: true`)
+- Rich CLI feedback with colors, timing, and data previews
+- Real-time LLM streaming display (thinking and response)
+- Lifecycle hooks (`onNodeStart`, `onNodeComplete`, `onNodeError`)
+- Comprehensive execution logging via `DebugExecutionEngine`
 
-**AI Workflow Execution** (LangGraph-inspired):
-- State-based execution
+**AI Workflow Execution** (State-based):
+- State-based execution via `Workflow` interface
+- Support for `START` and `END` logic
 - Conditional edges (routing based on state)
-- Support for `START` and `END` special nodes
-- Human-in-the-loop (pause/resume)
+- Human-in-the-loop support via `pause`/`resume` (in planning)
 
 ```typescript
 interface GraphState {
@@ -174,23 +178,34 @@ interface GraphState {
 ```
 
 #### 2.4.3 Execution Control
-- `execute(graph, initialState?)`: Run the graph
-- `pause()`: Pause execution
-- `resume()`: Resume from pause point
-- `cancel()`: Cancel execution
-- Event emission for execution lifecycle (nodeStart, nodeComplete, graphComplete)
+- `execute(initialState?)`: Run the graph
+- `debugEngine.execute(graph, initialState?)`: Run in debug mode
+- `workflow.run(initialState?)`: Run a defined workflow
+- Event emission for execution lifecycle (nodeStart, nodeComplete, nodeError)
 
-### 2.5 State Management
+### 2.5 Middleware System
+GraphKit supports a middleware pattern similar to Koa or Express, allowing developers to intercept and augment node execution.
+
+```typescript
+graph.use(async (context, next) => {
+  console.log(`Executing node: ${context.nodeId}`);
+  const start = Date.now();
+  await next();
+  console.log(`Completed in ${Date.now() - start}ms`);
+});
+```
+
+### 2.6 State Management
 
 #### 2.5.1 State Flow
 - State flows through edges
 - Nodes read from input ports, write to output ports
-- State can be accumulated or replaced (configurable)
+- State is managed in a `Map` within `GraphState`
 
-#### 2.5.2 Persistence (Optional)
+#### 2.5.2 Persistence
 - Checkpoint state at each step
 - Resume from any checkpoint
-- In-memory or custom storage backend
+- In-memory or custom storage backend via `StateStore`
 
 ```typescript
 interface StateStore {
@@ -207,16 +222,15 @@ interface StateStore {
 ### 3.1 Creating a Graph
 
 ```typescript
-import { GraphKit } from '@graph-kit/core';
-import { registerOllamaNodes } from '@graph-kit/ai';
+import { GraphKit, registerOllamaNodes } from './mod.ts';
 
 // Create a new graph
 const graph = GraphKit.createGraph({ name: 'My Workflow' });
 
-// Register AI nodes from @graph-kit/ai (no custom executor code needed)
+// Register AI nodes (pre-built)
 registerOllamaNodes(graph);
 
-// Create AI nodes directly
+// Add node
 const node1 = graph.addNode('ollama-chat', { 
   data: { 
     model: 'llama3',
@@ -230,22 +244,17 @@ const node1 = graph.addNode('ollama-chat', {
 
 ```typescript
 // Sequential execution
-const result = await graph.execute({
-  initialState: { values: new Map() }
-});
+const result = await graph.execute();
 
-// With state updates
-graph.on('nodeComplete', (event) => {
-  console.log(`Node ${event.nodeId} completed`);
-  console.log('Output:', event.output);
-});
-
-// AI Workflow style with conditional routing
+// Using Workflow for complex flows
 const workflow = graph.createWorkflow({
   startNode: 'start',
   endNode: 'end',
-  onStateUpdate: (state) => console.log('State updated:', state)
+  onStateUpdate: (state) => console.log('State updated')
 });
+
+workflow.connect('start.output', 'process.input')
+        .connect('process.output', 'end.input');
 
 await workflow.run();
 ```
@@ -254,35 +263,31 @@ await workflow.run();
 
 ```typescript
 // Get graph structure
-const nodes = graph.getNodes();
-const edges = graph.getEdges();
-
-// Find connected nodes
-const predecessors = graph.getPredecessors(nodeId);
-const successors = graph.getSuccessors(nodeId);
+const nodes = graph.nodes;
+const edges = graph.edges;
 
 // Validate graph
 const errors = graph.validate();
-if (errors.length > 0) {
-  console.error('Graph has errors:', errors);
-}
 
 // Serialization
 const json = graph.toJSON();
 const restored = GraphKit.fromJSON(json);
+
+// Visualization
+const mermaid = graph.toMermaid();
 ```
 
 ---
 
 ## 4. Advanced Features
 
-### 4.1 Conditional Edges (AI Workflows)
+### 4.1 Conditional Edges
 ```typescript
-graph.addConditionalEdge({
+workflow.addConditionalEdge({
   sourceNodeId: 'router',
   condition: (state) => {
-    if (state.values.get('category') === 'technical') {
-      return 'technical-agent';
+    if (state.values.get('router.category') === 'technical') {
+      return 'tech-agent';
     }
     return 'general-agent';
   }
@@ -290,34 +295,15 @@ graph.addConditionalEdge({
 ```
 
 ### 4.2 Subgraphs
-- Nest graphs within nodes
+- Nest graphs within nodes (planned)
 - Encapsulate complex logic
-- Reusable graph components
 
-### 4.3 Middleware/Interceptors
-```typescript
-graph.use(async (context, next) => {
-  console.log(`Executing node: ${context.nodeId}`);
-  const start = Date.now();
-  await next();
-  console.log(`Completed in ${Date.now() - start}ms`);
-});
-```
-
-### 4.4 Schema Validation
-- Optional schema validation using Standard Schema (Zod, Valibot, ArkType)
-- Validate port types at connection time
-- Validate node data against schema
-
-### 4.5 Visualization Helpers
-- Export to various formats (Mermaid, DOT, JSON)
-- Layout hints for UI rendering
-- Position and styling metadata
+### 4.3 Visualization Helpers
+- Export to Mermaid and DOT
+- Built-in support for node colors and labels in diagrams
 
 ```typescript
-// Export for visualization
-const mermaid = graph.toMermaid();
-const dot = graph.toDOT();
+console.log(graph.toMermaid());
 ```
 
 ---
@@ -325,112 +311,62 @@ const dot = graph.toDOT();
 ## 5. Non-Functional Requirements
 
 ### 5.1 Performance
-- Efficient graph traversal algorithms (BFS, DFS, topological sort)
-- Lazy evaluation where possible
-- Support for large graphs (1000+ nodes)
+- Efficient topological sort for execution
+- Support for parallel execution of independent branches
 
 ### 5.2 TypeScript Support
-- Full TypeScript support with generics
-- Type-safe node definitions
-- IntelliSense for node inputs/outputs
+- Strict typing for all interfaces
+- Generic support for node executors
 
 ### 5.3 Deno 2 Compatibility
-- Pure ESM modules
-- No external dependencies (or minimal)
-- Works with Deno permissions model
-- Follow Deno style guide (mod.ts entry, JSDoc docs)
-
-### 5.4 Serialization
-- Graphs are JSON-serializable
-- Support for `structuredClone`
-- Custom serialization hooks
-
-### 5.5 Error Handling
-- Graceful error propagation
-- Node-level error boundaries
-- Configurable error strategies (fail-fast, continue, retry)
+- Pure ESM
+- Native Deno APIs (crypto, fetch)
 
 ---
-
-
 
 ## 6. Project Structure
 
 ```
 graph-kit/
-├── mod.ts                  # Main entry point (@graph-kit/core)
-├── ai/                     # @graph-kit/ai inference library
-│   ├── mod.ts              # AI library entry
-│   ├── providers/          # Provider implementations
-│   │   ├── base.ts         # Base provider interface
-│   │   ├── ollama.ts       # Ollama local provider
-│   │   ├── openai.ts       # OpenAI-compatible provider
-│   │   └── types.ts        # Provider types
-│   ├── nodes/              # Pre-built GraphKit nodes
-│   │   ├── ollama-chat.ts
-│   │   ├── openai-chat.ts
-│   │   └── ai-embedding.ts
-│   └── tests/
-├── deno.json              # Deno configuration
-├── PRD.md                 # This file
-├── README.md              # Documentation
-├── src/                   # Core GraphKit source
-│   ├── core/
-│   │   ├── graph.ts       # Graph class
-│   │   ├── node.ts        # Node class
-│   │   ├── edge.ts        # Edge class
-│   │   └── port.ts        # Port class
-│   ├── execution/
-│   │   ├── engine.ts      # Execution engine
-│   │   ├── state.ts       # State management
-│   │   └── workflow.ts    # Workflow (AI-style)
-│   ├── algorithms/
-│   │   ├── traversal.ts   # BFS, DFS
-│   │   ├── sorting.ts     # Topological sort
-│   │   └── validation.ts  # Graph validation
-│   ├── types/
-│   │   └── index.ts       # TypeScript types
-│   └── utils/
-│       ├── serialization.ts
-│       └── export.ts      # Mermaid, DOT export
-├── tests/                 # Core tests
-│   ├── graph_test.ts
-│   ├── node_test.ts
-│   ├── execution_test.ts
-│   └── workflow_test.ts
-└── examples/
-    ├── basic-usage.ts
-    ├── ai-workflow.ts
-    └── custom-nodes.ts
+├── mod.ts                  # Main entry point
+├── ai/                     # AI inference library
+│   ├── mod.ts              # AI library registration
+│   ├── providers/          # Ollama, OpenAI providers
+│   └── nodes/              # AI GraphKit nodes
+├── src/                    # Core source
+│   ├── core/               # Graph, Node, Edge, Port
+│   ├── execution/          # Engine, Debug Engine, Workflow
+│   ├── algorithms/         # Traversal, Sorting, Validation
+│   ├── types/              # TS Types
+│   └── utils/              # Export (Mermaid/DOT)
+├── tests/                  # Unit tests
+└── examples/               # Usage examples
 ```
 
 ---
 
 ## 7. Usage Examples
 
-### 8.1 Basic Node Graph
+### 7.1 Basic Node Graph
 
 ```typescript
-import { GraphKit } from '@graph-kit/core';
+import { GraphKit, registerOllamaNodes } from './mod.ts';
 
 const graph = GraphKit.createGraph();
 
-// Define a simple math node
 graph.registerNodeType('add', {
   inputs: [
     { id: 'a', name: 'A', type: 'number', required: true },
     { id: 'b', name: 'B', type: 'number', required: true }
   ],
-  outputs: [
-    { id: 'result', name: 'Result', type: 'number' }
-  ],
-  execute: async (inputs) => ({
+  outputs: [{ id: 'result', name: 'Result', type: 'number' }],
+  execute: async (inputs: any) => ({
     result: inputs.a + inputs.b
   })
 });
 
 const n1 = graph.addNode('add', { data: { a: 5, b: 3 } });
-const n2 = graph.addNode('add');
+const n2 = graph.addNode('add', { data: { b: 10 } });
 
 graph.addEdge({
   sourceNodeId: n1.id,
@@ -439,173 +375,53 @@ graph.addEdge({
   targetPortId: 'a'
 });
 
-// Set n2's b input
-graph.updateNodeData(n2.id, { b: 10 });
-
-// Execute
 const result = await graph.execute();
-console.log(result.values); // { result: 18 } (8 + 10)
+console.log(result.values.get(`${n2.id}.result`)); // 18
 ```
 
-### 8.2 AI Workflow (RAG Pipeline)
+### 7.2 AI Debugging with Streaming (LFM2.5)
 
 ```typescript
-import { GraphKit } from '@graph-kit/core';
-import { registerOllamaNodes, registerOpenAINodes } from '@graph-kit/ai';
+import { GraphKit, DebugExecutionEngine, registerOllamaNodes } from "./mod.ts";
 
-const workflow = GraphKit.createWorkflow({
-  name: 'RAG Pipeline'
-});
-
-// Register AI nodes
-registerOllamaNodes(workflow);
-registerOpenAINodes(workflow);
-
-// Nodes
-workflow.addNode('ollama-chat', {
-  id: 'rewrite-query',
-  data: { 
-    model: 'llama3',
-    systemPrompt: 'Rewrite for better retrieval...' 
-  }
-});
-
-workflow.addNode('retrieve', {
-  id: 'retrieve',
-  type: 'vector-search',
-  config: { topK: 5 }
-});
-
-workflow.addNode('openai-chat', {
-  id: 'generate',
-  data: { 
-    model: 'gpt-4',
-    systemPrompt: 'Answer using context...' 
-  }
-});
-
-// Connections
-workflow
-  .connect('START', 'rewrite-query.input')
-  .connect('rewrite-query.response', 'retrieve.query')
-  .connect('retrieve.documents', 'generate.context')
-  .connect('generate.response', 'END');
-
-// Run
-const result = await workflow.run({
-  input: 'What is quantum computing?'
-});
-```
-
-### 8.3 Local Ollama Integration
-
-```typescript
-import { GraphKit } from '@graph-kit/core';
-import { registerOllamaNodes } from '@graph-kit/ai';
-
-const graph = GraphKit.createGraph({ name: 'Local AI Workflow' });
-
-// Register Ollama nodes
+const graph = GraphKit.createGraph();
 registerOllamaNodes(graph);
 
-// Add Ollama chat node
-const chatNode = graph.addNode('ollama-chat', {
+const aiNode = graph.addNode("ollama-chat", {
   data: {
-    model: 'llama3',
-    prompt: 'Explain Deno 2 in simple terms',
-    temperature: 0.5,
-    maxTokens: 500
-  }
+    model: "lfm2.5-thinking:latest",
+    prompt: "Solve: 10 + 15",
+    streaming: true,
+  },
+  metadata: { label: "LFM2.5 Thinking" }
 });
 
-// Execute with local Ollama
-const result = await graph.execute();
-console.log(result.values.get('response'));
+const debugEngine = new DebugExecutionEngine({
+  stepMode: true,
+  onNodeStart: (info) => console.log(`Starting: ${info.nodeId}`),
+});
+
+await debugEngine.execute(graph);
 ```
 
----
-
-
-
-## 8. Future Considerations
-
-### Core GraphKit
-- Visual editor integration (React Flow, Vue Flow bindings)
-- Real-time collaboration (CRDT support)
-- Distributed execution
-- Hot-reloading of node definitions
-- Debugging tools (step-through execution, state inspection)
-- Metrics and observability
-- Web Worker support for heavy computations
-
-### AI Inference Library
-- More local providers (LM Studio, GPT4All, MLC-LLM)
-- Multimodal support (image/audio inputs)
-- Automatic Ollama model downloading
-- Cost tracking for online APIs
-- Batch inference support
-- Fine-tuning workflow nodes
-- Embedding similarity search nodes
-- Tool calling UI integration
-
----
-
-## 9. AI Inference Library Specification (@graph-kit/ai)
-
-### 11.1 Overview
-Lightweight, zero-bloat AI model inference abstraction for Deno 2 that integrates seamlessly with GraphKit.
-
-### 11.2 Supported Providers
-| Provider | Type | Features |
-|----------|------|----------|
-| Ollama | Local | Chat, Completions, Embeddings, Streaming |
-| OpenAI | Online | Chat, Completions, Embeddings, Tool Calling |
-| Groq | Online | Fast inference, Chat, Completions |
-| OpenRouter | Online | Multi-model access |
-
-### 11.3 Core Features
-- Unified `ChatModel` interface for all providers
-- Type-safe request/response objects
-- Streaming support (Server-Sent Events)
-- Tool/function calling for agent workflows
-- Embeddings generation
-- Model listing and capability detection
-- Minimal dependencies (uses Deno's built-in fetch)
-
-### 11.4 Integration with GraphKit
-- Exports pre-built node types: `ollama-chat`, `openai-chat`, `ai-embedding`
-- Nodes automatically conform to GraphKit's port system:
-  - Inputs: `prompt`, `model`, `temperature`, `systemPrompt`
-  - Outputs: `response`, `tokens`, `usage`
-- No custom `execute` functions required
-- Works with all GraphKit execution modes
-
-### 11.5 AI Library API
+### 7.3 RAG Pipeline Visualization
 
 ```typescript
-import { createOllamaProvider } from '@graph-kit/ai/providers/ollama';
-import { ChatModel } from '@graph-kit/ai';
+import { GraphKit, registerOllamaNodes } from './mod.ts';
 
-// Create Ollama provider
-const ollama = createOllamaProvider({
-  baseUrl: 'http://localhost:11434'
-});
-
-// Use directly (without GraphKit)
-const response = await ollama.chat({
-  model: 'llama3',
-  messages: [{ role: 'user', content: 'Hello!' }],
-  stream: false
-});
-
-// Or get GraphKit node type
-const ollamaChatNode = ollama.getGraphKitNodeType();
+const graph = GraphKit.createGraph({ name: 'RAG Pipeline' });
+// ... register nodes and add connections ...
+console.log(graph.toMermaid());
 ```
 
-### 11.6 Non-Functional Requirements
-- Deno 2 native, no Node.js dependencies
-- Minimal footprint: <50KB gzipped
-- Works with Deno permissions: `--allow-net` (for Ollama and online APIs)
-- No external dependencies beyond standard library
-- Full TypeScript strict mode support
-- Comprehensive error handling for network failures
+---
+
+## 8. AI Inference Library Specification (@graph-kit/ai)
+
+### 8.1 Supported Providers
+- **Ollama**: Local inference, full streaming support
+- **OpenAI**: Compatible with any OpenAI-style API
+
+### 8.2 Integration
+- Exports `registerOllamaNodes(graph)` and `registerOpenAINodes(graph)`
+- Nodes handle all LLM communication; user only provides data/config

@@ -7,20 +7,16 @@ GraphKit is a lightweight, TypeScript-first library for building node graph appl
 - **Node System**: Typed units with inputs, outputs, and execution logic
 - **Port System**: Type-safe data flow between nodes
 - **Edge System**: Connect output ports to input ports
-- **Execution Engine**: Sequential, event-driven, and AI workflow execution modes
-- **State Management**: State flows through edges with checkpoint support
-- **TypeScript Support**: Full TypeScript support with generics
-- **Deno 2 Native**: Pure ESM modules, no external dependencies
+- **Execution Engine**: Sequential and state-based Workflow execution modes
+- **Debug Engine**: Interactive step-through execution with rich CLI feedback
+- **AI-First**: Built-in support for Ollama and OpenAI-compatible providers
+- **Visualization**: Export graphs directly to Mermaid and DOT formats
+- **TypeScript Native**: Full strict mode support with generics
 
 ## Installation
 
 ```typescript
-import { GraphKit } from 'jsr:@graph-kit/core';
-```
-
-Or use locally:
-
-```typescript
+// mod.ts exports everything you need
 import { GraphKit } from './mod.ts';
 ```
 
@@ -29,7 +25,7 @@ import { GraphKit } from './mod.ts';
 ```typescript
 import { GraphKit } from './mod.ts';
 
-const graph = GraphKit.createGraph({ metadata: { name: 'My Workflow' } });
+const graph = GraphKit.createGraph({ name: 'Basic Math' });
 
 // Define a simple math node
 graph.registerNodeType('add', {
@@ -38,9 +34,9 @@ graph.registerNodeType('add', {
     { id: 'b', name: 'B', type: 'number', required: true },
   ],
   outputs: [
-    { id: 'result', name: 'Result', type: 'number', required: false },
+    { id: 'result', name: 'Result', type: 'number' },
   ],
-  execute: async (inputs) => ({
+  execute: async (inputs: any) => ({
     result: inputs.a + inputs.b,
   }),
 });
@@ -55,85 +51,91 @@ graph.addEdge({
   targetPortId: 'a',
 });
 
+// Execute graph
 const result = await graph.execute();
-console.log(result.values);
+console.log('Final Result:', result.values.get(`${n2.id}.result`)); // 18
 ```
 
-## API Documentation
+## AI Features (Ollama & OpenAI)
 
-### Creating a Graph
-
-```typescript
-const graph = GraphKit.createGraph({ metadata: { name: 'My Graph' } });
-```
-
-### Registering Node Types
+Integration with local AI models via Ollama and cloud providers like OpenAI is built-in.
 
 ```typescript
-graph.registerNodeType('node-type', {
-  inputs: [{ id: 'input1', name: 'Input 1', type: 'string', required: true }],
-  outputs: [{ id: 'output1', name: 'Output 1', type: 'string', required: false }],
-  execute: async (inputs) => ({ output1: inputs.input1 }),
+import { GraphKit, registerOllamaNodes } from "./mod.ts";
+
+const graph = GraphKit.createGraph();
+registerOllamaNodes(graph);
+
+const aiNode = graph.addNode("ollama-chat", {
+  data: {
+    model: "granite4.1:3b",
+    prompt: "Explain Deno 2",
+    temperature: 0.5,
+    streaming: true,
+  }
 });
-```
 
-### Adding Nodes and Edges
-
-```typescript
-const node = graph.addNode('node-type', { data: { input1: 'value' } });
-
-graph.addEdge({
-  sourceNodeId: node1.id,
-  sourcePortId: 'output1',
-  targetNodeId: node2.id,
-  targetPortId: 'input1',
-});
-```
-
-### Execution
-
-```typescript
-// Sequential execution
 const result = await graph.execute();
+console.log("AI Response:", result.values.get(`${aiNode.id}.response`));
+```
 
-// Workflow (AI-style) execution
+## Workflow Execution
+
+For complex, state-based flows with conditional logic, use the `Workflow` API.
+
+```typescript
 const workflow = graph.createWorkflow({
-  startNode: 'start',
-  endNode: 'end',
+  startNode: 'agent1',
+  endNode: 'final-output',
+});
+
+workflow.connect('agent1.response', 'router.input');
+
+workflow.addConditionalEdge({
+  sourceNodeId: 'router',
+  condition: (state) => {
+    return state.values.get('router.is_tech') ? 'tech-agent' : 'general-agent';
+  }
 });
 
 await workflow.run();
 ```
 
-### Querying
+## Debugging & Observability
+
+Use the `DebugExecutionEngine` for interactive debugging. It supports `stepMode` which waits for user input between node executions.
 
 ```typescript
-const predecessors = graph.getPredecessors(nodeId);
-const successors = graph.getSuccessors(nodeId);
-const errors = graph.validate();
+import { DebugExecutionEngine } from "./mod.ts";
+
+const debugEngine = new DebugExecutionEngine({
+  stepMode: true, // Wait for SPACE key
+  onNodeStart: (info) => console.log(`Starting: ${info.nodeId}`),
+});
+
+const result = await debugEngine.execute(graph);
 ```
 
-### Serialization
+## Visualization
+
+Generate diagrams for your graphs instantly.
 
 ```typescript
-const json = graph.toJSON();
-const restored = GraphKit.fromJSON(json);
+console.log(graph.toMermaid());
+console.log(graph.toDOT());
 ```
 
-### Visualization
+See `examples/mermaid-complex.ts` for generating complete Markdown reports with diagrams.
+
+## Middleware
 
 ```typescript
-const mermaid = graph.toMermaid();
-const dot = graph.toDOT();
-
-// Example Mermaid output:
-// graph TD
-//   node1[add]
-//   node2[multiply]
-//   node1 --> node2
+graph.use(async (context, next) => {
+  const start = Date.now();
+  await next();
+  console.log(`${context.nodeId} took ${Date.now() - start}ms`);
+});
 ```
-
-See `examples/mermaid-export.ts` for a complete example that generates diagrams you can view at https://mermaid.live.
 
 ## Testing
 
