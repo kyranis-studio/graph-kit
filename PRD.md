@@ -207,6 +207,34 @@ interface GraphState {
 - `workflow.run(initialState?)`: Run a defined workflow with minimal logging by default
 - Event emission for execution lifecycle (nodeStart, nodeComplete, nodeError, llmStreamChunk)
 
+#### 2.4.4 Modern Muted Color Palette
+All CLI logging output uses a modern muted color scheme for improved readability:
+
+```typescript
+const Colors = {
+  gray: '\x1b[90m',      // Dim text, secondary info
+  white: '\x1b[37m',     // Headers, labels
+  silver: '\x1b[92m',    // Bullets, icons
+  rose: '\x1b[95m',      // Thinking streams, errors (soft magenta)
+  gold: '\x1b[93m',      // Timing, warnings (soft yellow)
+  sky: '\x1b[94m',       // Node IDs, inputs/outputs (soft blue)
+  coral: '\x1b[91m',     // Errors, failures (soft red)
+  teal: '\x1b[96m',      // Responses, success, completions (soft cyan)
+  bgGray: '\x1b[100m',   // Header backgrounds
+  bgRose: '\x1b[45m',    // Error state backgrounds
+  bgTeal: '\x1b[46m',    // Success state backgrounds
+};
+```
+
+Color usage by context:
+- **Node IDs**: sky (soft blue)
+- **Thinking streams**: rose (soft magenta)
+- **Response streams**: teal (soft cyan)
+- **Timing/duration**: gold (soft yellow)
+- **Success/completion**: teal (soft cyan)
+- **Errors/failures**: coral (soft red)
+- **Headers/backgrounds**: bgGray, bgTeal, bgRose based on state
+
 ### 2.5 Middleware System
 GraphKit supports a middleware pattern similar to Koa or Express, allowing developers to intercept and augment node execution.
 
