@@ -1,6 +1,6 @@
 import type { Graph, GraphState, ExecutionContext } from '../types/index.ts';
 import { topologicalSort } from '../algorithms/sorting.ts';
-import { Colors, color } from '../utils/colors.ts';
+import { Colors, color, bold } from '../utils/colors.ts';
 
 interface StreamState {
   response: string;

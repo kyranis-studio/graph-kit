@@ -1,6 +1,6 @@
 import { GraphKit } from "../mod.ts";
 import { DebugExecutionEngine } from "../src/execution/debug-engine.ts";
-import { Colors, color } from "../src/utils/colors.ts";
+import { Colors, color, bold } from "../src/utils/colors.ts";
 
 const graph = GraphKit.createGraph({ metadata: { name: "Debug Example" } });
 
@@ -10,10 +10,11 @@ graph.registerNodeType("add", {
     { id: "a", name: "A", type: "number", required: true },
     { id: "b", name: "B", type: "number", required: true },
   ],
-  outputs: [{ id: "result", name: "Result", type: "number" }],
-  execute: async (inputs) => ({
-    result: (inputs as any).a + (inputs as any).b,
-  }),
+  outputs: [{ id: "result", name: "Result", type: "number", required: false }],
+  execute: async (inputs: unknown) => {
+    const inputRecord = inputs as Record<string, unknown>;
+    return { result: (inputRecord.a as number) + (inputRecord.b as number) };
+  },
 });
 
 graph.registerNodeType("multiply", {
@@ -21,18 +22,19 @@ graph.registerNodeType("multiply", {
     { id: "a", name: "A", type: "number", required: true },
     { id: "b", name: "B", type: "number", required: true },
   ],
-  outputs: [{ id: "result", name: "Result", type: "number" }],
-  execute: async (inputs) => ({
-    result: (inputs as any).a * (inputs as any).b,
-  }),
+  outputs: [{ id: "result", name: "Result", type: "number", required: false }],
+  execute: async (inputs: unknown) => {
+    const inputRecord = inputs as Record<string, unknown>;
+    return { result: (inputRecord.a as number) * (inputRecord.b as number) };
+  },
   metadata: { label: "Multiply Node" },
 });
 
 graph.registerNodeType("log", {
   inputs: [{ id: "value", name: "Value", type: "any", required: true }],
-  outputs: [{ id: "value", name: "Value", type: "any" }],
-  execute: async (inputs) => ({
-    value: inputs.value,
+  outputs: [{ id: "value", name: "Value", type: "any", required: false }],
+  execute: async (inputs: unknown) => ({
+    value: (inputs as Record<string, unknown>).value,
   }),
   metadata: { label: "Logger" },
 });

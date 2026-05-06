@@ -1,5 +1,5 @@
 import { GraphKit } from '../mod.ts';
-import { Colors, color } from '../src/utils/colors.ts';
+import { Colors, color, bold } from '../src/utils/colors.ts';
 
 const graph = GraphKit.createGraph({ metadata: { name: 'Mermaid Export Example' } });
 
@@ -127,7 +127,7 @@ const result = await graph.execute();
 console.log(`\n${color(Colors.line.repeat(60), Colors.dim)}`);
 console.log(`${color(' RESULTS ', Colors.bold + Colors.bgTeal + Colors.white)}`);
 console.log(color(Colors.line.repeat(60), Colors.dim));
-console.log(`  ${color(Colors.bullet, Colors.sky)} ${color('Source output:', Colors.dim)} ${color(result.values.get('source.value'), Colors.silver)}`);
-console.log(`  ${color(Colors.bullet, Colors.sky)} ${color('Process1 output:', Colors.dim)} ${color(result.values.get('process1.output'), Colors.silver)}`);
-console.log(`  ${color(Colors.bullet, Colors.sky)} ${color('Process2 output:', Colors.dim)} ${color(result.values.get('process2.output'), Colors.silver)}`);
+console.log(`  ${color(Colors.bullet, Colors.sky)} ${color('Source output:', Colors.dim)} ${color(String(result.values.get('source.value') ?? ''), Colors.silver)}`);
+console.log(`  ${color(Colors.bullet, Colors.sky)} ${color('Process1 output:', Colors.dim)} ${color(String(result.values.get('process1.output') ?? ''), Colors.silver)}`);
+console.log(`  ${color(Colors.bullet, Colors.sky)} ${color('Process2 output:', Colors.dim)} ${color(String(result.values.get('process2.output') ?? ''), Colors.silver)}`);
 console.log(color(Colors.line.repeat(60), Colors.dim) + '\n');

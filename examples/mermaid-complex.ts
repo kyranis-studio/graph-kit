@@ -1,5 +1,5 @@
 import { GraphKit } from '../mod.ts';
-import { Colors, color } from '../src/utils/colors.ts';
+import { Colors, color, bold } from '../src/utils/colors.ts';
 
 const graph = GraphKit.createGraph({ metadata: { name: 'AI Workflow - RAG Pipeline' } });
 
@@ -149,6 +149,6 @@ const result = await graph.execute();
 console.log(`\n${color(Colors.line.repeat(60), Colors.dim)}`);
 console.log(`${color(' RESULTS ', Colors.bold + Colors.bgTeal + Colors.white)}`);
 console.log(color(Colors.line.repeat(60), Colors.dim));
-console.log(`  ${color(Colors.bullet, Colors.sky)} ${color('Start query:', Colors.dim)} ${color(result.values.get('start.query'), Colors.silver)}`);
-console.log(`  ${color(Colors.bullet, Colors.sky)} ${color('Rewritten:', Colors.dim)} ${color(result.values.get('rewrite-query.response'), Colors.silver)}`);
+console.log(`  ${color(Colors.bullet, Colors.sky)} ${color('Start query:', Colors.dim)} ${color(String(result.values.get('start.query') ?? ''), Colors.silver)}`);
+console.log(`  ${color(Colors.bullet, Colors.sky)} ${color('Rewritten:', Colors.dim)} ${color(String(result.values.get('rewrite-query.response') ?? ''), Colors.silver)}`);
 console.log(color(Colors.line.repeat(60), Colors.dim) + '\n');

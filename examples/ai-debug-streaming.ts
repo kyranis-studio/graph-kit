@@ -14,7 +14,7 @@ graph.registerNodeType("add", {
     { id: "a", name: "A", type: "number", required: true },
     { id: "b", name: "B", type: "number", required: true },
   ],
-  outputs: [{ id: "result", name: "Result", type: "number" }],
+  outputs: [{ id: "result", name: "Result", type: "number", required: false }],
   execute: async (inputs) => ({
     result: (inputs as any).a + (inputs as any).b,
   }),

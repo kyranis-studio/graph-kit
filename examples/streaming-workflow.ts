@@ -81,8 +81,15 @@ if (errors.length > 0) {
   Deno.exit(1);
 }
 
-console.log(color("Make sure Ollama is running with:", Colors.dim), color("ollama serve", Colors.teal));
-console.log(color("Pull model with:", Colors.dim), color("ollama pull llama3", Colors.teal), "\n");
+console.log(
+  color("Make sure Ollama is running with:", Colors.dim),
+  color("ollama serve", Colors.teal),
+);
+console.log(
+  color("Pull model with:", Colors.dim),
+  color("ollama pull granite4.1:3b", Colors.teal),
+  "\n",
+);
 
 const engine = new ExecutionEngine({ verbose: true });
 
@@ -92,7 +99,9 @@ console.log(color("\nFinal state:", Colors.teal));
 for (const [key, value] of result.values) {
   const formattedKey = color(`  ${key}:`, Colors.sky);
   if (typeof value === "string" && value.length > 200) {
-    console.log(`${formattedKey} ${value.slice(0, 200)}${color("...", Colors.dim)} (${color(String(value.length), Colors.gold)} chars)`);
+    console.log(
+      `${formattedKey} ${value.slice(0, 200)}${color("...", Colors.dim)} (${color(String(value.length), Colors.gold)} chars)`,
+    );
   } else {
     console.log(`${formattedKey} ${color(String(value), Colors.silver)}`);
   }

@@ -1,7 +1,7 @@
 import type { Workflow, GraphState, Graph, Node } from '../types/index.ts';
 import { GraphImpl } from '../core/graph.ts';
 import type { LogLevel } from './engine.ts';
-import { Colors, color } from '../utils/colors.ts';
+import { Colors, color, bold } from '../utils/colors.ts';
 
 interface StreamState {
   response: string;
