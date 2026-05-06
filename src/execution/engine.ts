@@ -65,7 +65,7 @@ export class ExecutionEngine {
     graph.on('llmStreamChunk', (data: unknown) => {
       const chunk = data as { nodeId: string; state: StreamState };
       this.#streamState.set(chunk.nodeId, chunk.state);
-      if (this.#logLevel === 'verbose') {
+      if (this.#logLevel !== 'silent') {
         this.#printStreamChunk(chunk);
       }
     });
@@ -160,21 +160,29 @@ export class ExecutionEngine {
     const prevThinkingLen = this.#lastThinkingLength.get(nodeId) || 0;
     const prevResponseLen = this.#lastResponseLength.get(nodeId) || 0;
     
-    const newThinking = thinking ? thinking.slice(prevThinkingLen) : '';
-    const newResponse = response.slice(prevResponseLen);
-    
-    if (thinking && newThinking.length > 0) {
-      if (!started.thinking) {
-        Deno.stdout.writeSync(new TextEncoder().encode(`  ${color('▸ thinking:', Colors.magenta + Colors.dim)} `));
-        started.thinking = true;
+    // Only show thinking in verbose mode
+    if (this.#logLevel === 'verbose' && thinking) {
+      const newThinking = thinking.slice(prevThinkingLen);
+      if (newThinking.length > 0) {
+        if (!started.thinking) {
+          Deno.stdout.writeSync(new TextEncoder().encode(`  ${color('▸ thinking:', Colors.magenta + Colors.dim)} `));
+          started.thinking = true;
+        }
+        Deno.stdout.writeSync(new TextEncoder().encode(color(newThinking, Colors.magenta)));
+        this.#lastThinkingLength.set(nodeId, thinking.length);
       }
-      Deno.stdout.writeSync(new TextEncoder().encode(color(newThinking, Colors.magenta)));
-      this.#lastThinkingLength.set(nodeId, thinking.length);
     }
     
+    // Show response in both minimal and verbose modes
+    const newResponse = response.slice(prevResponseLen);
     if (newResponse.length > 0) {
       if (!started.response) {
-        Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color('▸ response:', Colors.brightGreen + Colors.dim)} `));
+        if (this.#logLevel === 'verbose') {
+          Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color('▸ response:', Colors.brightGreen + Colors.dim)} `));
+        } else {
+          // Minimal mode - just show the response directly
+          Deno.stdout.writeSync(new TextEncoder().encode(`  `));
+        }
         started.response = true;
       }
       Deno.stdout.writeSync(new TextEncoder().encode(color(newResponse, Colors.brightGreen)));
@@ -182,7 +190,7 @@ export class ExecutionEngine {
     }
     
     if (done) {
-      Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color('━ stream complete ━', Colors.dim)}\n`));
+      Deno.stdout.writeSync(new TextEncoder().encode(`\n`));
     }
   }
 
