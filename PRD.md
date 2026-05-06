@@ -2,8 +2,8 @@
 
 ## Product Requirements Document (PRD)
 
-**Version:** 1.3  
-**Date:** May 5, 2026  
+**Version:** 1.4  
+**Date:** May 6, 2026  
 **Status:** Updated
 
 ---
@@ -331,14 +331,14 @@ graph-kit/
 ├── mod.ts                  # Main entry point
 ├── ai/                     # AI inference library
 │   ├── mod.ts              # AI library registration
-│   ├── providers/          # Ollama, OpenAI providers
+│   ├── providers/          # Ollama, OpenAI, OpenRouter providers
 │   └── nodes/              # AI GraphKit nodes
 ├── src/                    # Core source
 │   ├── core/               # Graph, Node, Edge, Port
 │   ├── execution/          # Engine, Debug Engine, Workflow
 │   ├── algorithms/         # Traversal, Sorting, Validation
 │   ├── types/              # TS Types
-│   └── utils/              # Export (Mermaid/DOT)
+│   └── utils/              # Export (Mermaid/DOT), dotenv loader
 ├── tests/                  # Unit tests
 └── examples/               # Usage examples
 ```
@@ -414,14 +414,87 @@ const graph = GraphKit.createGraph({ name: 'RAG Pipeline' });
 console.log(graph.toMermaid());
 ```
 
+### 7.4 OpenRouter Multi-Model Example
+
+```typescript
+import { loadEnv } from './src/utils/dotenv.ts';
+import { GraphKit, registerOpenRouterNodes } from './mod.ts';
+
+// Load API key from .env file
+await loadEnv();
+
+const graph = GraphKit.createGraph({ name: 'OpenRouter Example' });
+registerOpenRouterNodes(graph);
+
+// Use any model from openrouter.ai/models
+const chatNode = graph.addNode('openrouter-chat', {
+  data: {
+    model: 'anthropic/claude-3-haiku',
+    prompt: 'Explain Deno 2 in simple terms',
+    temperature: 0.7,
+    systemPrompt: 'You are a helpful assistant.',
+  },
+});
+
+const result = await graph.execute();
+console.log('Response:', result.values.get(`${chatNode.id}.response`));
+```
+
+### 7.5 Streaming with Thinking Support
+
+All AI providers (Ollama, OpenAI, OpenRouter) support streaming mode with thinking content. This is useful for models that expose their reasoning process (e.g., DeepSeek R1, LFM2.5, OpenAI o1).
+
+```typescript
+import { loadEnv } from './src/utils/dotenv.ts';
+import { GraphKit, registerOpenRouterNodes } from './mod.ts';
+
+await loadEnv();
+
+const graph = GraphKit.createGraph({ name: 'Streaming with Thinking' });
+registerOpenRouterNodes(graph);
+
+const chatNode = graph.addNode('openrouter-chat', {
+  data: {
+    model: 'deepseek/deepseek-r1', // Model with thinking support
+    prompt: 'Solve: What is 15 * 23?',
+    streaming: true, // Enable streaming mode
+    temperature: 0.7,
+  },
+});
+
+// Listen for streaming chunks (thinking and response)
+graph.on('llmStreamChunk', ({ nodeId, state }) => {
+  if (state.thinking) {
+    console.log('Thinking:', state.thinking);
+  }
+  if (state.done) {
+    console.log('Final Response:', state.response);
+  }
+});
+
+const result = await graph.execute();
+console.log('Response:', result.values.get(`${chatNode.id}.response`));
+const thinking = result.values.get(`${chatNode.id}.thinking`);
+if (thinking) {
+  console.log('Thinking:', thinking);
+}
+```
+
 ---
 
 ## 8. AI Inference Library Specification (@graph-kit/ai)
 
 ### 8.1 Supported Providers
-- **Ollama**: Local inference, full streaming support
-- **OpenAI**: Compatible with any OpenAI-style API
+- **Ollama**: Local inference, full streaming support with thinking content (e.g., LFM2.5, Granite models)
+- **OpenAI**: Compatible with any OpenAI-style API, supports thinking content for o1 models
+- **OpenRouter**: Access 200+ models via unified API, requires `OPENROUTER_API_KEY`, supports thinking models like DeepSeek R1
 
-### 8.2 Integration
-- Exports `registerOllamaNodes(graph)` and `registerOpenAINodes(graph)`
+### 8.2 Environment Configuration
+- Load API keys from `.env` file using `loadEnv()` utility
+- Supports `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `OLLAMA_BASE_URL` variables
+- Automatic fallback to environment variables if `.env` not present
+
+### 8.3 Integration
+- Exports `registerOllamaNodes(graph)`, `registerOpenAINodes(graph)`, and `registerOpenRouterNodes(graph)`
 - Nodes handle all LLM communication; user only provides data/config
+- Example: `examples/openrouter-example.ts`

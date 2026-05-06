@@ -56,9 +56,85 @@ const result = await graph.execute();
 console.log('Final Result:', result.values.get(`${n2.id}.result`)); // 18
 ```
 
-## AI Features (Ollama & OpenAI)
+## AI Features (Ollama, OpenAI & OpenRouter)
 
-Integration with local AI models via Ollama and cloud providers like OpenAI is built-in.
+Integration with local AI models via Ollama, cloud providers like OpenAI, and 200+ models via OpenRouter is built-in.
+
+### Environment Setup
+
+Create a `.env` file in your project root:
+
+```
+OPENAI_API_KEY=sk-...
+OPENROUTER_API_KEY=sk-or-v1-...
+```
+
+Load it in your code:
+
+```typescript
+import { loadEnv } from './src/utils/dotenv.ts';
+await loadEnv();
+```
+
+### OpenRouter Example
+
+```typescript
+import { loadEnv } from './src/utils/dotenv.ts';
+import { GraphKit, registerOpenRouterNodes } from "./mod.ts";
+
+await loadEnv();
+
+const graph = GraphKit.createGraph();
+registerOpenRouterNodes(graph);
+
+// Basic usage (non-streaming)
+const aiNode = graph.addNode("openrouter-chat", {
+  data: {
+    model: "anthropic/claude-3-haiku",  // 200+ models available
+    prompt: "Explain Deno 2",
+    temperature: 0.7,
+  }
+});
+
+const result = await graph.execute();
+console.log("AI Response:", result.values.get(`${aiNode.id}.response`));
+```
+
+### Streaming with Thinking Support
+
+All providers support streaming mode with thinking content for models that expose reasoning (e.g., DeepSeek R1, OpenAI o1, LFM2.5).
+
+```typescript
+import { loadEnv } from './src/utils/dotenv.ts';
+import { GraphKit, registerOpenRouterNodes } from "./mod.ts";
+
+await loadEnv();
+
+const graph = GraphKit.createGraph();
+registerOpenRouterNodes(graph);
+
+const aiNode = graph.addNode("openrouter-chat", {
+  data: {
+    model: "deepseek/deepseek-r1",  // Model with thinking support
+    prompt: "Solve: What is 15 * 23?",
+    streaming: true,  // Enable streaming mode
+    temperature: 0.7,
+  }
+});
+
+// Listen for streaming chunks
+graph.on('llmStreamChunk', ({ nodeId, state }) => {
+  if (state.thinking) console.log('Thinking:', state.thinking);
+  if (state.done) console.log('Response:', state.response);
+});
+
+const result = await graph.execute();
+console.log("Final Response:", result.values.get(`${aiNode.id}.response`));
+const thinking = result.values.get(`${aiNode.id}.thinking`);
+if (thinking) console.log("Thinking:", thinking);
+```
+
+### Ollama Example
 
 ```typescript
 import { GraphKit, registerOllamaNodes } from "./mod.ts";
@@ -66,17 +142,32 @@ import { GraphKit, registerOllamaNodes } from "./mod.ts";
 const graph = GraphKit.createGraph();
 registerOllamaNodes(graph);
 
+// Basic usage
 const aiNode = graph.addNode("ollama-chat", {
   data: {
     model: "granite4.1:3b",
     prompt: "Explain Deno 2",
     temperature: 0.5,
-    streaming: true,
   }
 });
 
 const result = await graph.execute();
 console.log("AI Response:", result.values.get(`${aiNode.id}.response`));
+
+// With streaming and thinking support (e.g., lfm2.5-thinking:latest)
+const thinkingNode = graph.addNode("ollama-chat", {
+  data: {
+    model: "lfm2.5-thinking:latest",
+    prompt: "Solve: 10 + 15",
+    streaming: true,
+  }
+});
+
+graph.on('llmStreamChunk', ({ state }) => {
+  if (state.done) console.log('Response:', state.response);
+});
+
+await graph.execute();
 ```
 
 ## Workflow Execution

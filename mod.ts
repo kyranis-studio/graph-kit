@@ -1,6 +1,6 @@
 import { GraphImpl as Graph } from './src/core/graph.ts';
 import type { GraphConfig, NodeTypeDefinition } from './src/types/index.ts';
-import { registerOllamaNodes, registerOpenAINodes, registerEmbeddingNodes } from './ai/mod.ts';
+import { registerOllamaNodes, registerOpenAINodes, registerOpenRouterNodes, registerEmbeddingNodes } from './ai/mod.ts';
 
 export const GraphKit = {
   createGraph(config?: GraphConfig): Graph {
@@ -25,6 +25,6 @@ export const GraphKit = {
 
 export type { GraphImpl as Graph } from './src/core/graph.ts';
 export type * from './src/types/index.ts';
-export { registerOllamaNodes, registerOpenAINodes, registerEmbeddingNodes };
+export { registerOllamaNodes, registerOpenAINodes, registerOpenRouterNodes, registerEmbeddingNodes };
 export { DebugExecutionEngine } from './src/execution/debug-engine.ts';
 export type { NodeDebugInfo } from './src/execution/debug-engine.ts';

@@ -1,15 +1,15 @@
 import type { AIProvider, ChatMessage, ChatRequest, ChatResponse, StreamChunk } from './types.ts';
 
-export function createOpenAIProvider(config: { apiKey?: string; baseUrl?: string } = {}) {
-  const apiKey = config.apiKey || Deno.env.get('OPENAI_API_KEY');
-  const baseUrl = config.baseUrl || 'https://api.openai.com/v1';
+export function createOpenRouterProvider(config: { apiKey?: string; baseUrl?: string } = {}) {
+  const apiKey = config.apiKey || Deno.env.get('OPENROUTER_API_KEY');
+  const baseUrl = config.baseUrl || 'https://openrouter.ai/api/v1';
 
   if (!apiKey) {
-    throw new Error('OpenAI API key required. Set OPENAI_API_KEY env var or pass in config.');
+    throw new Error('OpenRouter API key required. Set OPENROUTER_API_KEY env var or pass in config.');
   }
 
   const chat = async (request: ChatRequest): Promise<ChatResponse> => {
-    const messages = request.systemPrompt 
+    const messages = request.systemPrompt
       ? [{ role: 'system' as const, content: request.systemPrompt }, ...request.messages]
       : request.messages;
 
@@ -18,6 +18,8 @@ export function createOpenAIProvider(config: { apiKey?: string; baseUrl?: string
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': Deno.env.get('APP_URL') || 'http://localhost',
+        'X-Title': Deno.env.get('APP_NAME') || 'graph-kit',
       },
       body: JSON.stringify({
         model: request.model,
@@ -28,7 +30,7 @@ export function createOpenAIProvider(config: { apiKey?: string; baseUrl?: string
       }),
     });
 
-    if (!response.ok) throw new Error(`OpenAI chat failed: ${response.statusText}`);
+    if (!response.ok) throw new Error(`OpenRouter chat failed: ${response.statusText}`);
     const data = await response.json();
     return {
       message: { role: 'assistant', content: data.choices[0].message.content },
@@ -41,7 +43,7 @@ export function createOpenAIProvider(config: { apiKey?: string; baseUrl?: string
   };
 
   async function* streamChat(request: ChatRequest): AsyncIterable<StreamChunk> {
-    const messages = request.systemPrompt 
+    const messages = request.systemPrompt
       ? [{ role: 'system' as const, content: request.systemPrompt }, ...request.messages]
       : request.messages;
 
@@ -50,6 +52,8 @@ export function createOpenAIProvider(config: { apiKey?: string; baseUrl?: string
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': Deno.env.get('APP_URL') || 'http://localhost',
+        'X-Title': Deno.env.get('APP_NAME') || 'graph-kit',
       },
       body: JSON.stringify({
         model: request.model,
@@ -60,7 +64,7 @@ export function createOpenAIProvider(config: { apiKey?: string; baseUrl?: string
       }),
     });
 
-    if (!response.ok) throw new Error(`OpenAI stream chat failed: ${response.statusText}`);
+    if (!response.ok) throw new Error(`OpenRouter stream chat failed: ${response.statusText}`);
     if (!response.body) throw new Error('No response body');
 
     const reader = response.body.getReader();
@@ -86,8 +90,7 @@ export function createOpenAIProvider(config: { apiKey?: string; baseUrl?: string
           try {
             const chunk = JSON.parse(trimmed.slice(6));
             const delta = chunk.choices?.[0]?.delta?.content || '';
-            // OpenAI o1 models may include reasoning content
-            const thinking = chunk.choices?.[0]?.delta?.reasoning_content || chunk.choices?.[0]?.delta?.thinking || '';
+            const thinking = chunk.choices?.[0]?.delta?.reasoning || chunk.choices?.[0]?.delta?.thinking || '';
             const isDone = chunk.choices?.[0]?.finish_reason !== null;
 
             if (thinking) fullThinking += thinking;
