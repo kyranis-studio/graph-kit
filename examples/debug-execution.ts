@@ -72,15 +72,15 @@ const debugEngine = new DebugExecutionEngine({
   stepMode: false,
   onNodeStart: (info) => {
     // Custom hook - could send to monitoring service
-    console.log(color("[HOOK] Starting node:", Colors.rose), color(info.nodeId, Colors.sky));
+    console.log(color("[HOOK]", Colors.rose), color("Starting node:", Colors.dim), bold(color(info.nodeId, Colors.sky)));
   },
   onNodeComplete: (info) => {
     console.log(
-      color("[HOOK] Completed node:", Colors.teal), color(info.nodeId, Colors.sky), color(`(${info.nodeType})`, Colors.dim), color(`in ${info.duration?.toFixed(2)}ms`, Colors.gold),
+      color("[HOOK]", Colors.teal), color("Completed node:", Colors.dim), bold(color(info.nodeId, Colors.sky)), color(`in ${info.duration?.toFixed(2)}ms`, Colors.gold),
     );
   },
   onNodeError: (info) => {
-    console.error(color("[HOOK] Error in node:", Colors.coral), color(info.nodeId, Colors.sky), info.error);
+    console.error(color("[HOOK]", Colors.coral), bold(color("Error in node:", Colors.coral)), bold(color(info.nodeId, Colors.sky)), info.error);
   },
 });
 
@@ -88,19 +88,25 @@ const debugEngine = new DebugExecutionEngine({
 graph.use(async (context, next) => {
   const start = Date.now();
   await next();
-  console.log(color("[MIDDLEWARE]", Colors.silver), color(context.nodeId, Colors.sky), color(`total: ${Date.now() - start}ms`, Colors.gold));
+  console.log(color("[MIDDLEWARE]", Colors.silver), bold(color(context.nodeId, Colors.sky)), color(`total: ${Date.now() - start}ms`, Colors.gold));
 });
 
 // Execute with debug engine
 const result = await debugEngine.execute(graph);
 
-console.log(color("\nFinal state:", Colors.teal));
+console.log(color(Colors.line.repeat(60), Colors.dim));
+console.log(`${color(' FINAL STATE ', Colors.bold + Colors.bgTeal + Colors.white)}`);
+console.log(color(Colors.line.repeat(60), Colors.dim));
 for (const [key, value] of result.values) {
-  console.log(`  ${color(key + ":", Colors.sky)} ${color(String(value), Colors.silver)}`);
+  console.log(`  ${color(Colors.bullet, Colors.sky)} ${color(key, Colors.sky)}${color(':', Colors.dim)} ${color(String(value), Colors.silver)}`);
 }
 
-console.log(color("\nExecution log:", Colors.teal));
+console.log(`\n${color(Colors.line.repeat(60), Colors.dim)}`);
+console.log(`${color(' EXECUTION LOG ', Colors.bold + Colors.bgGray + Colors.white)}`);
+console.log(color(Colors.line.repeat(60), Colors.dim));
 for (const entry of debugEngine.executionLog) {
   const statusColor = entry.status === 'completed' ? Colors.teal : entry.status === 'error' ? Colors.coral : Colors.sky;
-  console.log(`  ${color(entry.nodeId, Colors.sky)} ${color(`(${entry.nodeType})`, Colors.dim)}: ${color(entry.status, statusColor)}`);
+  const icon = entry.status === 'completed' ? Colors.check : entry.status === 'error' ? Colors.cross : Colors.dot;
+  console.log(`  ${color(icon, statusColor)} ${bold(color(entry.nodeId, Colors.sky))} ${color(`(${entry.nodeType})`, Colors.dim)}${color(':', Colors.dim)} ${color(entry.status, statusColor)}`);
 }
+console.log(color(Colors.line.repeat(60), Colors.dim) + '\n');

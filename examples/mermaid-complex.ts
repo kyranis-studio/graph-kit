@@ -99,10 +99,13 @@ graph.addEdge({ sourceNodeId: 'tech-agent', sourcePortId: 'response', targetNode
 graph.addEdge({ sourceNodeId: 'general-agent', sourcePortId: 'response', targetNodeId: 'end', targetPortId: 'input' });
 
 // Generate and display Mermaid diagram
-console.log(color('=== AI Workflow RAG Pipeline ===', Colors.teal), '\n');
-console.log('```mermaid');
+console.log(`\n${color(Colors.line.repeat(60), Colors.gray)}`);
+console.log(`${color(' GRAPHKIT ', Colors.bold + Colors.bgTeal + Colors.white)} ${bold(color('MERMAID EXPORT', Colors.sky))}`);
+console.log(color(Colors.line.repeat(60), Colors.dim));
+
+console.log(`${color('```mermaid', Colors.dim)}`);
 console.log(color(graph.toMermaid(), Colors.silver));
-console.log('```\n');
+console.log(`${color('```', Colors.dim)}\n`);
 
 // Save to files
 try {
@@ -128,17 +131,24 @@ ${graph.toDOT()}
 `;
 
   await Deno.writeTextFile('rag-pipeline.md', markdown);
-  console.log(color('Saved visualization to rag-pipeline.md', Colors.teal));
-  console.log(color('View it at:', Colors.dim), color('https://mermaid.live', Colors.teal), color('or any Markdown editor', Colors.dim));
+  console.log(`  ${color(Colors.check, Colors.teal)} ${color('Saved visualization to', Colors.dim)} ${color('rag-pipeline.md', Colors.teal)}`);
+  console.log(`  ${color(Colors.bullet, Colors.gray)} ${color('View it at:', Colors.dim)} ${color('https://mermaid.live', Colors.sky)}`);
 } catch (error) {
   if (error instanceof Deno.errors.PermissionDenied) {
-    console.log(color('To save files, run with:', Colors.dim), color('deno run --allow-read --allow-write examples/mermaid-complex.ts', Colors.sky));
+    console.log(`  ${color(Colors.warn, Colors.gold)} ${color('To save files, run with:', Colors.dim)} ${color('deno run --allow-read --allow-write examples/mermaid-complex.ts', Colors.sky)}`);
   }
 }
 
 // Execute the graph
-console.log(color('\n=== Executing Graph ===', Colors.teal));
+console.log(`\n${color(Colors.line.repeat(60), Colors.gray)}`);
+console.log(`${color(' GRAPHKIT ', Colors.bold + Colors.bgGray + Colors.white)} ${bold(color('EXECUTION', Colors.sky))}`);
+console.log(color(Colors.line.repeat(60), Colors.dim));
+
 const result = await graph.execute();
-console.log(color('Execution complete!', Colors.teal));
-console.log(color('Start query:', Colors.dim), result.values.get('start.query'));
-console.log(color('Rewritten:', Colors.dim), result.values.get('rewrite-query.response'));
+
+console.log(`\n${color(Colors.line.repeat(60), Colors.dim)}`);
+console.log(`${color(' RESULTS ', Colors.bold + Colors.bgTeal + Colors.white)}`);
+console.log(color(Colors.line.repeat(60), Colors.dim));
+console.log(`  ${color(Colors.bullet, Colors.sky)} ${color('Start query:', Colors.dim)} ${color(result.values.get('start.query'), Colors.silver)}`);
+console.log(`  ${color(Colors.bullet, Colors.sky)} ${color('Rewritten:', Colors.dim)} ${color(result.values.get('rewrite-query.response'), Colors.silver)}`);
+console.log(color(Colors.line.repeat(60), Colors.dim) + '\n');

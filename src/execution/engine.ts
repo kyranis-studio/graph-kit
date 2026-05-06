@@ -34,11 +34,16 @@ export class ExecutionEngine {
     const sortedNodes = topologicalSort(graph);
 
     if (this.#logLevel !== 'silent') {
-      console.log(`\n${color(' GRAPH EXECUTION ', Colors.bgGray + Colors.white)}${color(` ${sortedNodes.length} nodes`, Colors.dim)}`);
+      console.log(`\n${color(Colors.line.repeat(50), Colors.gray)}`);
+      console.log(`${color(' GRAPHKIT ', Colors.bold + Colors.bgGray + Colors.white)} ${bold(color('EXECUTION', Colors.sky))}${color(` ${sortedNodes.length} nodes`, Colors.dim)}`);
+      
       if (this.#logLevel === 'verbose') {
-        console.log(color('─'.repeat(50), Colors.dim));
-        console.log(`Order: ${sortedNodes.map((id, i) => color(id, i === 0 ? Colors.teal : i === sortedNodes.length - 1 ? Colors.rose : Colors.sky)).join(color(' → ', Colors.dim))}`);
-        console.log(color('─'.repeat(50), Colors.dim) + '\n');
+        console.log(color(Colors.line.repeat(50), Colors.dim));
+        const order = sortedNodes.map((id, i) => color(id, i === 0 ? Colors.teal : i === sortedNodes.length - 1 ? Colors.rose : Colors.sky)).join(color(' → ', Colors.dim));
+        console.log(`  ${color(Colors.dot, Colors.gray)} ${color('Order:', Colors.dim)} ${order}`);
+        console.log(color(Colors.line.repeat(50), Colors.dim) + '\n');
+      } else {
+        console.log(color(Colors.line.repeat(50), Colors.dim) + '\n');
       }
     }
 
@@ -64,21 +69,21 @@ export class ExecutionEngine {
       Object.assign(inputs, node.data);
 
       if (this.#logLevel !== 'silent') {
-        const progress = `[${i + 1}/${sortedNodes.length}]`;
-        if (this.#logLevel === 'verbose') {
-          console.log(`${color('●', Colors.silver)} ${color(progress, Colors.dim)} ${color(nodeId, Colors.sky)} ${color(`(${node.type})`, Colors.dim)}`);
+        const progress = color(`[${i + 1}/${sortedNodes.length}]`, Colors.dim);
+        const nodeIdText = bold(color(nodeId, Colors.sky));
+        const typeText = color(`(${node.type})`, Colors.gray);
+        
+        console.log(`${color(Colors.arrow, Colors.sky)} ${progress} ${nodeIdText} ${typeText}`);
 
-           if (Object.keys(inputs).length > 0) {
-             const inputPreview = Object.entries(inputs)
-               .map(([k, v]) => `${k}=${typeof v === 'string' ? `"${v.toString().slice(0, 30)}${v.toString().length > 30 ? '...' : ''}"` : v}`)
-               .join(', ');
-             console.log(`  ${color('inputs:', Colors.dim)} ${inputPreview}`);
+        if (this.#logLevel === 'verbose' && Object.keys(inputs).length > 0) {
+           for (const [k, v] of Object.entries(inputs)) {
+             const preview = typeof v === 'string' ? `"${v.slice(0, 40)}${v.length > 40 ? '...' : ''}"` : String(v);
+             console.log(`    ${color(Colors.bullet, Colors.sky)} ${color(k, Colors.gray)} ${color('=', Colors.dim)} ${color(preview, Colors.silver)}`);
            }
-         } else {
-           console.log(`${color('●', Colors.silver)} ${color(progress, Colors.dim)} ${color(nodeId, Colors.sky)} ${color(`(${node.type})`, Colors.dim)}`);
          }
       }
 
+      const startTime = performance.now();
       graph.emit('nodeStart', { nodeId, inputs });
       try {
         const context: ExecutionContext = { graph, nodeId, state, config: node.data };
@@ -98,21 +103,25 @@ export class ExecutionEngine {
         };
 
         await runWithMiddlewares();
+        const duration = performance.now() - startTime;
         
-        if (this.#logLevel === 'verbose') {
-          const streamInfo = this.#streamState.get(nodeId);
-          if (streamInfo) {
-            this.#printStreamSummary(streamInfo);
+        if (this.#logLevel !== 'silent') {
+          const time = color(`${duration.toFixed(1)}ms`, Colors.gold);
+          if (this.#logLevel === 'verbose') {
+            const streamInfo = this.#streamState.get(nodeId);
+            if (streamInfo) {
+              this.#printStreamSummary(streamInfo);
+            }
+            console.log(`  ${color(Colors.check, Colors.teal)} ${color('done', Colors.teal)} ${color('in', Colors.dim)} ${time}\n`);
+          } else {
+            console.log(`  ${color(Colors.check, Colors.teal)} ${color('done', Colors.teal)} ${color('in', Colors.dim)} ${time}`);
           }
-          console.log(`  ${color('✓ complete', Colors.teal)}`);
-        } else if (this.#logLevel === 'minimal') {
-          console.log(`  ${color('✓ complete', Colors.teal)}`);
         }
         
         graph.emit('nodeComplete', { nodeId, output: inputs, inputs });
       } catch (error) {
         if (this.#logLevel !== 'silent') {
-          console.log(`  ${color('✗ failed: ' + error, Colors.coral)}`);
+          console.log(`  ${color(Colors.cross, Colors.coral)} ${bold(color('FAILED', Colors.coral))}: ${color(String(error), Colors.silver)}\n`);
         }
         graph.emit('nodeError', { nodeId, error });
         throw error;
@@ -120,8 +129,8 @@ export class ExecutionEngine {
     }
 
     if (this.#logLevel !== 'silent') {
-      console.log('\n' + color('─'.repeat(50), Colors.dim));
-      console.log(`${color('✓ GRAPH COMPLETE', Colors.bgTeal + Colors.white)}\n`);
+      console.log(color(Colors.line.repeat(50), Colors.dim));
+      console.log(`${color(' COMPLETED ', Colors.bold + Colors.bgTeal + Colors.white)}\n`);
     }
 
     graph.emit('graphComplete', { state });
@@ -145,7 +154,7 @@ export class ExecutionEngine {
       const newThinking = thinking.slice(prevThinkingLen);
       if (newThinking.length > 0) {
         if (!started.thinking) {
-          Deno.stdout.writeSync(new TextEncoder().encode(`  ${color('▸ thinking:', Colors.gray + Colors.dim)} `));
+          Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color('thinking', Colors.italic + Colors.gray)} ${color(Colors.line.repeat(30), Colors.dim)}\n  `));
           started.thinking = true;
         }
         Deno.stdout.writeSync(new TextEncoder().encode(color(newThinking, Colors.gray)));
@@ -158,9 +167,9 @@ export class ExecutionEngine {
     if (newResponse.length > 0) {
       if (!started.response) {
         if (this.#logLevel === 'verbose') {
-          Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color('▸ response:', Colors.teal + Colors.dim)} `));
+          const lineLen = Math.max(5, 40 - 'response'.length);
+          Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color('response', Colors.italic + Colors.teal)} ${color(Colors.line.repeat(lineLen), Colors.dim)}\n  `));
         } else {
-          // Minimal mode - just show the response directly
           Deno.stdout.writeSync(new TextEncoder().encode(`  `));
         }
         started.response = true;
@@ -177,9 +186,9 @@ export class ExecutionEngine {
   #printStreamSummary(streamInfo: StreamState): void {
     const parts: string[] = [];
     if (streamInfo.thinking) {
-      parts.push(`${color('thinking:', Colors.gray)} ${streamInfo.thinking.length} chars`);
+      parts.push(`${color('thinking', Colors.gray)} ${color(String(streamInfo.thinking.length), Colors.silver)}`);
     }
-    parts.push(`${color('response:', Colors.teal)} ${streamInfo.response.length} chars`);
-    console.log(`  ${color(parts.join('  '), Colors.dim)}`);
+    parts.push(`${color('response', Colors.teal)} ${color(String(streamInfo.response.length), Colors.silver)}`);
+    console.log(`  ${color(Colors.dot, Colors.silver)} ${color('stream:', Colors.dim)} ${parts.join(color('  ', Colors.dim))} ${color('chars', Colors.dim)}`);
   }
 }

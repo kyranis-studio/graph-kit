@@ -75,11 +75,14 @@ export class WorkflowImpl implements Workflow {
     this.#stepCount = 0;
 
     if (this.#logLevel !== 'silent') {
-      console.log(`\n${color(' WORKFLOW EXECUTION ', Colors.bgGray + Colors.white)}`);
+      console.log(`\n${color(Colors.line.repeat(50), Colors.gray)}`);
+      console.log(`${color(' GRAPHKIT ', Colors.bold + Colors.bgGray + Colors.white)} ${bold(color('WORKFLOW', Colors.sky))}`);
       if (this.#logLevel === 'verbose') {
-        console.log(color('─'.repeat(50), Colors.dim));
-        console.log(`Start: ${color(this.#startNode, Colors.teal)} → End: ${color(this.#endNode, Colors.gold)}`);
-        console.log(color('─'.repeat(50), Colors.dim) + '\n');
+        console.log(color(Colors.line.repeat(50), Colors.dim));
+        console.log(`  ${color(Colors.dot, Colors.gray)} ${color('Start:', Colors.dim)} ${color(this.#startNode, Colors.teal)} ${color('→', Colors.dim)} ${color('End:', Colors.dim)} ${color(this.#endNode, Colors.gold)}`);
+        console.log(color(Colors.line.repeat(50), Colors.dim) + '\n');
+      } else {
+        console.log(color(Colors.line.repeat(50), Colors.dim) + '\n');
       }
     }
 
@@ -100,11 +103,11 @@ export class WorkflowImpl implements Workflow {
       if (!node) throw new Error(`Node ${currentNodeId} not found`);
 
       if (this.#logLevel !== 'silent') {
-        if (this.#logLevel === 'verbose') {
-          console.log(`${color('●', Colors.silver)} ${color(`[step ${this.#stepCount}]`, Colors.dim)} ${color(currentNodeId, Colors.sky)} ${color(`(${node.type})`, Colors.dim)}`);
-        } else {
-          console.log(`${color('●', Colors.silver)} ${color(`[step ${this.#stepCount}]`, Colors.dim)} ${color(currentNodeId, Colors.sky)} ${color(`(${node.type})`, Colors.dim)}`);
-        }
+        const progress = color(`[step ${this.#stepCount}]`, Colors.dim);
+        const nodeIdText = bold(color(currentNodeId, Colors.sky));
+        const typeText = color(`(${node.type})`, Colors.gray);
+        
+        console.log(`${color(Colors.arrow, Colors.sky)} ${progress} ${nodeIdText} ${typeText}`);
       }
 
       const inputs: Record<string, unknown> = {};
@@ -117,27 +120,30 @@ export class WorkflowImpl implements Workflow {
       Object.assign(inputs, node.data);
 
       if (this.#logLevel === 'verbose' && Object.keys(inputs).length > 0) {
-        const inputPreview = Object.entries(inputs)
-          .map(([k, v]) => `${k}=${typeof v === 'string' ? `"${v.toString().slice(0, 20)}${v.toString().length > 20 ? '...' : ''}"` : v}`)
-          .join(', ');
-        console.log(`  ${color('inputs:', Colors.dim)} ${inputPreview}`);
+        for (const [k, v] of Object.entries(inputs)) {
+          const preview = typeof v === 'string' ? `"${v.slice(0, 30)}${v.length > 30 ? '...' : ''}"` : String(v);
+          console.log(`    ${color(Colors.bullet, Colors.sky)} ${color(k, Colors.gray)} ${color('=', Colors.dim)} ${color(preview, Colors.silver)}`);
+        }
       }
 
+      const startTime = performance.now();
       const output = await node.execute(inputs, { graph: this.#graph, nodeId: currentNodeId, state });
+      const duration = performance.now() - startTime;
       
       for (const [portId, value] of Object.entries(output as Record<string, unknown>)) {
         state.values.set(`${currentNodeId}.${portId}`, value);
       }
 
       if (this.#logLevel !== 'silent') {
+        const time = color(`${duration.toFixed(1)}ms`, Colors.gold);
         if (this.#logLevel === 'verbose') {
           const streamInfo = this.#streamState.get(currentNodeId);
           if (streamInfo) {
             this.#printStreamSummary(streamInfo);
           }
-          console.log(`  ${color('✓ complete', Colors.teal)}`);
+          console.log(`  ${color(Colors.check, Colors.teal)} ${color('done', Colors.teal)} ${color('in', Colors.dim)} ${time}`);
         } else {
-          console.log(`  ${color('✓ complete', Colors.teal)}`);
+          console.log(`  ${color(Colors.check, Colors.teal)} ${color('done', Colors.teal)} ${color('in', Colors.dim)} ${time}`);
         }
       }
 
@@ -147,7 +153,7 @@ export class WorkflowImpl implements Workflow {
       if (conditional) {
         const nextNodeId = conditional.condition(state);
         if (this.#logLevel === 'verbose') {
-          console.log(`  ${color('→ condition →', Colors.dim)} ${color(nextNodeId, Colors.gold)}\n`);
+          console.log(`  ${color('→ condition →', Colors.dim)} ${bold(color(nextNodeId, Colors.gold))}\n`);
         } else if (this.#logLevel === 'minimal') {
           console.log(`  ${color('→', Colors.dim)} ${color(nextNodeId, Colors.gold)}`);
         }
@@ -155,19 +161,19 @@ export class WorkflowImpl implements Workflow {
       } else {
         const outgoing = this.#graph.getEdgesForNode(currentNodeId).filter(e => e.sourceNodeId === currentNodeId);
         if (!outgoing.length) throw new Error(`No outgoing edges from ${currentNodeId}`);
+        const nextNodeId = outgoing[0].targetNodeId;
         if (this.#logLevel === 'verbose') {
-          const nextNodeId = outgoing[0].targetNodeId;
-          console.log(`  ${color('→ next →', Colors.dim)} ${color(nextNodeId, Colors.sky)}\n`);
+          console.log(`  ${color('→ next →', Colors.dim)} ${bold(color(nextNodeId, Colors.sky))}\n`);
         } else if (this.#logLevel === 'minimal') {
-          console.log(`  ${color('→', Colors.dim)} ${color(outgoing[0].targetNodeId, Colors.sky)}`);
+          console.log(`  ${color('→', Colors.dim)} ${color(nextNodeId, Colors.sky)}`);
         }
-        currentNodeId = outgoing[0].targetNodeId;
+        currentNodeId = nextNodeId;
       }
     }
 
     if (this.#logLevel !== 'silent') {
-      console.log(color('─'.repeat(50), Colors.dim));
-      console.log(`${color('✓ WORKFLOW COMPLETE', Colors.bgTeal + Colors.white)} ${color(`(${this.#stepCount} steps)`, Colors.dim)}\n`);
+      console.log(color(Colors.line.repeat(50), Colors.dim));
+      console.log(`${color(' WORKFLOW COMPLETE ', Colors.bold + Colors.bgTeal + Colors.white)} ${color(`(${this.#stepCount} steps)`, Colors.dim)}\n`);
     }
 
     return state;
@@ -190,16 +196,17 @@ export class WorkflowImpl implements Workflow {
     
     if (thinking && newThinking.length > 0) {
       if (!started.thinking) {
-        Deno.stdout.writeSync(new TextEncoder().encode(`  ${color('▸ thinking:', Colors.rose + Colors.dim)} `));
+        Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color('thinking', Colors.italic + Colors.gray)} ${color(Colors.line.repeat(30), Colors.dim)}\n  `));
         started.thinking = true;
       }
-      Deno.stdout.writeSync(new TextEncoder().encode(color(newThinking, Colors.rose)));
+      Deno.stdout.writeSync(new TextEncoder().encode(color(newThinking, Colors.gray)));
       this.#lastThinkingLength.set(nodeId, thinking.length);
     }
 
     if (newResponse.length > 0) {
       if (!started.response) {
-        Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color('▸ response:', Colors.teal + Colors.dim)} `));
+        const lineLen = Math.max(5, 40 - 'response'.length);
+        Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color('response', Colors.italic + Colors.teal)} ${color(Colors.line.repeat(lineLen), Colors.dim)}\n  `));
         started.response = true;
       }
       Deno.stdout.writeSync(new TextEncoder().encode(color(newResponse, Colors.teal)));
@@ -207,16 +214,16 @@ export class WorkflowImpl implements Workflow {
     }
     
     if (done) {
-      Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color('━ stream complete ━', Colors.dim)}\n`));
+      Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color(Colors.line.repeat(40), Colors.dim)}\n`));
     }
   }
 
   #printStreamSummary(streamInfo: StreamState): void {
     const parts: string[] = [];
     if (streamInfo.thinking) {
-      parts.push(`${color('thinking:', Colors.rose)} ${streamInfo.thinking.length} chars`);
+      parts.push(`${color('thinking', Colors.gray)} ${color(String(streamInfo.thinking.length), Colors.silver)}`);
     }
-    parts.push(`${color('response:', Colors.teal)} ${streamInfo.response.length} chars`);
-    console.log(`  ${color(parts.join('  '), Colors.dim)}`);
+    parts.push(`${color('response', Colors.teal)} ${color(String(streamInfo.response.length), Colors.silver)}`);
+    console.log(`  ${color(Colors.dot, Colors.silver)} ${color('stream:', Colors.dim)} ${parts.join(color('  ', Colors.dim))} ${color('chars', Colors.dim)}`);
   }
 }
