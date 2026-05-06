@@ -7,9 +7,10 @@ GraphKit is a lightweight, TypeScript-first library for building node graph appl
 - **Node System**: Typed units with inputs, outputs, and execution logic
 - **Port System**: Type-safe data flow between nodes
 - **Edge System**: Connect output ports to input ports
-- **Execution Engine**: Sequential and state-based Workflow execution modes
-- **Debug Engine**: Interactive step-through execution with rich CLI feedback
-- **AI-First**: Built-in support for Ollama and OpenAI-compatible providers
+- **Execution Engine**: Sequential execution with optional verbose logging and real-time LLM streaming display
+- **Debug Engine**: Interactive step-through execution with rich CLI feedback and streaming support
+- **Workflow Engine**: State-based execution with conditional edges and verbose step logging
+- **AI-First**: Built-in support for Ollama and OpenAI-compatible providers with streaming and thinking support
 - **Visualization**: Export graphs directly to Mermaid and DOT formats
 - **TypeScript Native**: Full strict mode support with generics
 
@@ -172,12 +173,13 @@ await graph.execute();
 
 ## Workflow Execution
 
-For complex, state-based flows with conditional logic, use the `Workflow` API.
+For complex, state-based flows with conditional logic, use the `Workflow` API. Workflows also support `verbose` mode for step logging.
 
 ```typescript
 const workflow = graph.createWorkflow({
   startNode: 'agent1',
   endNode: 'final-output',
+  verbose: true, // Enable step-by-step logging
 });
 
 workflow.connect('agent1.response', 'router.input');
@@ -192,9 +194,33 @@ workflow.addConditionalEdge({
 await workflow.run();
 ```
 
+See `examples/streaming-workflow.ts` for a complete example with streaming LLM nodes.
+
 ## Debugging & Observability
 
-Use the `DebugExecutionEngine` for interactive debugging. It supports `stepMode` which waits for user input between node executions.
+### ExecutionEngine with Verbose Mode
+
+The `ExecutionEngine` provides step-by-step logging and real-time LLM streaming display when `verbose: true` is set.
+
+```typescript
+import { ExecutionEngine } from "./mod.ts";
+
+const engine = new ExecutionEngine({ verbose: true });
+const result = await engine.execute(graph);
+
+// Output shows:
+// ● [1/3] math1 (add)
+//   inputs: a=10, b=15
+//   ✓ complete
+// ● [2/3] ai1 (ollama-chat)
+//   ▸ thinking: [streaming thinking content...]
+//   ▸ response: [streaming response content...]
+//   ✓ complete
+```
+
+### DebugExecutionEngine
+
+For interactive debugging with step-through mode, use `DebugExecutionEngine`. It supports `stepMode` which waits for user input (SPACE key) between node executions.
 
 ```typescript
 import { DebugExecutionEngine } from "./mod.ts";
@@ -202,6 +228,7 @@ import { DebugExecutionEngine } from "./mod.ts";
 const debugEngine = new DebugExecutionEngine({
   stepMode: true, // Wait for SPACE key
   onNodeStart: (info) => console.log(`Starting: ${info.nodeId}`),
+  onStreamChunk: (state) => console.log('Stream:', state),
 });
 
 const result = await debugEngine.execute(graph);

@@ -1,12 +1,65 @@
 import type { Graph, GraphState, ExecutionContext } from '../types/index.ts';
 import { topologicalSort } from '../algorithms/sorting.ts';
 
+const Colors = {
+  reset: '\x1b[0m',
+  dim: '\x1b[2m',
+  green: '\x1b[32m',
+  blue: '\x1b[34m',
+  cyan: '\x1b[36m',
+  yellow: '\x1b[33m',
+  red: '\x1b[31m',
+  magenta: '\x1b[35m',
+  brightGreen: '\x1b[92m',
+  brightYellow: '\x1b[93m',
+  brightMagenta: '\x1b[95m',
+  brightCyan: '\x1b[96m',
+  bgDarkBlue: '\x1b[44m',
+  bgDarkGreen: '\x1b[42m',
+};
+
+function color(text: string, colorCode: string): string {
+  return `${colorCode}${text}${Colors.reset}`;
+}
+
+interface StreamState {
+  response: string;
+  thinking?: string;
+  done: boolean;
+}
+
 export class ExecutionEngine {
+  #verbose: boolean;
+  #streamState: Map<string, StreamState> = new Map();
+  #lastThinkingLength: Map<string, number> = new Map();
+  #lastResponseLength: Map<string, number> = new Map();
+  #streamStarted: Map<string, { thinking: boolean; response: boolean }> = new Map();
+
+  constructor(config?: { verbose?: boolean }) {
+    this.#verbose = config?.verbose ?? false;
+  }
+
   async execute(graph: Graph, initialState?: GraphState): Promise<GraphState> {
     const state: GraphState = initialState || { values: new Map(), messages: [] };
     const sortedNodes = topologicalSort(graph);
 
-    for (const nodeId of sortedNodes) {
+    if (this.#verbose) {
+      console.log(`\n${color(' GRAPH EXECUTION ', Colors.bgDarkBlue + Colors.reset)}${color(` ${sortedNodes.length} nodes`, Colors.dim)}`);
+      console.log(color('─'.repeat(50), Colors.dim));
+      console.log(`Order: ${sortedNodes.map((id, i) => color(id, i === 0 ? Colors.green : i === sortedNodes.length - 1 ? Colors.brightMagenta : Colors.blue)).join(color(' → ', Colors.dim))}`);
+      console.log(color('─'.repeat(50), Colors.dim) + '\n');
+    }
+
+    graph.on('llmStreamChunk', (data: unknown) => {
+      const chunk = data as { nodeId: string; state: StreamState };
+      this.#streamState.set(chunk.nodeId, chunk.state);
+      if (this.#verbose) {
+        this.#printStreamChunk(chunk);
+      }
+    });
+
+    for (let i = 0; i < sortedNodes.length; i++) {
+      const nodeId = sortedNodes[i];
       const node = graph.getNode(nodeId)!;
       const inputs: Record<string, unknown> = {};
       
@@ -17,6 +70,18 @@ export class ExecutionEngine {
       }
 
       Object.assign(inputs, node.data);
+
+      if (this.#verbose) {
+        const progress = `[${i + 1}/${sortedNodes.length}]`;
+        console.log(`${color('●', Colors.cyan)} ${color(progress, Colors.dim)} ${color(nodeId, Colors.brightCyan)} ${color(`(${node.type})`, Colors.dim)}`);
+        
+        if (Object.keys(inputs).length > 0) {
+          const inputPreview = Object.entries(inputs)
+            .map(([k, v]) => `${k}=${typeof v === 'string' ? `"${v.toString().slice(0, 30)}${v.toString().length > 30 ? '...' : ''}"` : v}`)
+            .join(', ');
+          console.log(`  ${color('inputs:', Colors.dim)} ${inputPreview}`);
+        }
+      }
 
       graph.emit('nodeStart', { nodeId, inputs });
       try {
@@ -37,14 +102,78 @@ export class ExecutionEngine {
         };
 
         await runWithMiddlewares();
+        
+        if (this.#verbose) {
+          const streamInfo = this.#streamState.get(nodeId);
+          if (streamInfo) {
+            this.#printStreamSummary(streamInfo);
+          }
+          console.log(`  ${color('✓ complete', Colors.brightGreen)}`);
+        }
+        
         graph.emit('nodeComplete', { nodeId, output: inputs, inputs });
       } catch (error) {
+        if (this.#verbose) {
+          console.log(`  ${color('✗ failed: ' + error, Colors.red)}`);
+        }
         graph.emit('nodeError', { nodeId, error });
         throw error;
       }
     }
 
+    if (this.#verbose) {
+      console.log('\n' + color('─'.repeat(50), Colors.dim));
+      console.log(`${color('✓ GRAPH COMPLETE', Colors.bgDarkGreen + Colors.reset)}\n`);
+    }
+
     graph.emit('graphComplete', { state });
     return state;
+  }
+
+  #printStreamChunk(chunk: { nodeId: string; state: StreamState }): void {
+    const { nodeId } = chunk;
+    const { thinking, response, done } = chunk.state;
+    
+    if (!this.#streamStarted.has(nodeId)) {
+      this.#streamStarted.set(nodeId, { thinking: false, response: false });
+    }
+    const started = this.#streamStarted.get(nodeId)!;
+    
+    const prevThinkingLen = this.#lastThinkingLength.get(nodeId) || 0;
+    const prevResponseLen = this.#lastResponseLength.get(nodeId) || 0;
+    
+    const newThinking = thinking ? thinking.slice(prevThinkingLen) : '';
+    const newResponse = response.slice(prevResponseLen);
+    
+    if (thinking && newThinking.length > 0) {
+      if (!started.thinking) {
+        Deno.stdout.writeSync(new TextEncoder().encode(`  ${color('▸ thinking:', Colors.magenta + Colors.dim)} `));
+        started.thinking = true;
+      }
+      Deno.stdout.writeSync(new TextEncoder().encode(color(newThinking, Colors.magenta)));
+      this.#lastThinkingLength.set(nodeId, thinking.length);
+    }
+    
+    if (newResponse.length > 0) {
+      if (!started.response) {
+        Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color('▸ response:', Colors.brightGreen + Colors.dim)} `));
+        started.response = true;
+      }
+      Deno.stdout.writeSync(new TextEncoder().encode(color(newResponse, Colors.brightGreen)));
+      this.#lastResponseLength.set(nodeId, response.length);
+    }
+    
+    if (done) {
+      Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color('━ stream complete ━', Colors.dim)}\n`));
+    }
+  }
+
+  #printStreamSummary(streamInfo: StreamState): void {
+    const parts: string[] = [];
+    if (streamInfo.thinking) {
+      parts.push(`${color('thinking:', Colors.magenta)} ${streamInfo.thinking.length} chars`);
+    }
+    parts.push(`${color('response:', Colors.brightGreen)} ${streamInfo.response.length} chars`);
+    console.log(`  ${color(parts.join('  '), Colors.dim)}`);
   }
 }

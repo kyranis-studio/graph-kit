@@ -151,22 +151,33 @@ interface ExecutionContext {
 
 #### 2.4.2 Graph Execution Modes
 
-**Sequential Execution** (default):
+**Sequential Execution** (default via `ExecutionEngine`):
 - Execute nodes in topological order
 - Wait for all inputs to be available
 - Support for parallel execution of independent nodes
+- Optional `verbose` mode for step-by-step logging
+- Real-time LLM streaming display (thinking and response) when `verbose: true`
+- Basic execution log showing node progress, inputs preview, and completion status
 
-**Debug Execution**:
+```typescript
+const engine = new ExecutionEngine({ verbose: true });
+const result = await engine.execute(graph);
+```
+
+**Debug Execution** (via `DebugExecutionEngine`):
 - Interactive step-through mode (using `stepMode: true`)
 - Rich CLI feedback with colors, timing, and data previews
 - Real-time LLM streaming display (thinking and response)
-- Lifecycle hooks (`onNodeStart`, `onNodeComplete`, `onNodeError`)
-- Comprehensive execution logging via `DebugExecutionEngine`
+- Lifecycle hooks (`onNodeStart`, `onNodeComplete`, `onNodeError`, `onStreamChunk`)
+- Comprehensive execution logging via `executionLog`
+- Stream state tracking with `#streamState`, `#streamStarted` maps
 
-**AI Workflow Execution** (State-based):
+**AI Workflow Execution** (State-based via `Workflow`):
 - State-based execution via `Workflow` interface
 - Support for `START` and `END` logic
 - Conditional edges (routing based on state)
+- Optional `verbose` mode for step-by-step execution logging
+- Real-time streaming display for LLM nodes
 - Human-in-the-loop support via `pause`/`resume` (in planning)
 
 ```typescript
@@ -178,10 +189,12 @@ interface GraphState {
 ```
 
 #### 2.4.3 Execution Control
-- `execute(initialState?)`: Run the graph
-- `debugEngine.execute(graph, initialState?)`: Run in debug mode
+- `execute(initialState?)`: Run the graph (via `graph.execute()`)
+- `new ExecutionEngine({ verbose? })`: Create engine with optional verbose logging
+- `engine.execute(graph, initialState?)`: Run with step logging and streaming display
+- `debugEngine.execute(graph, initialState?)`: Run in debug mode with interactive stepping
 - `workflow.run(initialState?)`: Run a defined workflow
-- Event emission for execution lifecycle (nodeStart, nodeComplete, nodeError)
+- Event emission for execution lifecycle (nodeStart, nodeComplete, nodeError, llmStreamChunk)
 
 ### 2.5 Middleware System
 GraphKit supports a middleware pattern similar to Koa or Express, allowing developers to intercept and augment node execution.
@@ -478,6 +491,31 @@ const thinking = result.values.get(`${chatNode.id}.thinking`);
 if (thinking) {
   console.log('Thinking:', thinking);
 }
+```
+
+### 7.6 ExecutionEngine with Verbose Logging
+
+The `ExecutionEngine` provides step-by-step logging and real-time streaming display for LLM nodes.
+
+```typescript
+import { GraphKit, ExecutionEngine, registerOllamaNodes } from './mod.ts';
+
+const graph = GraphKit.createGraph({ name: 'Streaming Workflow' });
+registerOllamaNodes(graph);
+
+// ... add nodes with streaming: true ...
+
+const engine = new ExecutionEngine({ verbose: true });
+const result = await engine.execute(graph);
+
+// Output shows:
+// ● [1/3] math1 (add)
+//   inputs: a=10, b=15
+//   ✓ complete
+// ● [2/3] ai1 (ollama-chat)
+//   ▸ thinking: [streaming thinking content...]
+//   ▸ response: [streaming response content...]
+//   ✓ complete
 ```
 
 ---
