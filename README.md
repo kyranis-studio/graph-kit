@@ -7,7 +7,7 @@ GraphKit is a lightweight, TypeScript-first library for building node graph appl
 - **Node System**: Typed units with inputs, outputs, and execution logic
 - **Port System**: Type-safe data flow between nodes
 - **Edge System**: Connect output ports to input ports
-- **Execution Engine**: Sequential execution with optional verbose logging and real-time LLM streaming display
+- **Execution Engine**: Sequential execution with minimal logging by default, optional verbose mode, and real-time LLM streaming display
 - **Debug Engine**: Interactive step-through execution with rich CLI feedback and streaming support
 - **Workflow Engine**: State-based execution with conditional edges and verbose step logging
 - **AI-First**: Built-in support for Ollama and OpenAI-compatible providers with streaming and thinking support
@@ -173,49 +173,89 @@ await graph.execute();
 
 ## Workflow Execution
 
-For complex, state-based flows with conditional logic, use the `Workflow` API. Workflows also support `verbose` mode for step logging.
+For complex, state-based flows with conditional logic, use the `Workflow` API. Workflows have minimal logging enabled by default, and support three logging levels.
 
 ```typescript
 const workflow = graph.createWorkflow({
   startNode: 'agent1',
   endNode: 'final-output',
-  verbose: true, // Enable step-by-step logging
+  logLevel: 'minimal', // Default - basic progress logging
 });
 
-workflow.connect('agent1.response', 'router.input');
-
-workflow.addConditionalEdge({
-  sourceNodeId: 'router',
-  condition: (state) => {
-    return state.values.get('router.is_tech') ? 'tech-agent' : 'general-agent';
-  }
+// Silent mode - no output
+const silentWorkflow = graph.createWorkflow({
+  startNode: 'agent1',
+  endNode: 'final-output',
+  logLevel: 'silent',
 });
 
-await workflow.run();
+// Verbose mode - detailed step-by-step logging
+const verboseWorkflow = graph.createWorkflow({
+  startNode: 'agent1',
+  endNode: 'final-output',
+  logLevel: 'verbose',
+});
+
+// Backward compatible with verbose boolean
+const legacyVerbose = graph.createWorkflow({
+  startNode: 'agent1',
+  endNode: 'final-output',
+  verbose: true, // Maps to logLevel: 'verbose'
+});
 ```
 
 See `examples/streaming-workflow.ts` for a complete example with streaming LLM nodes.
 
 ## Debugging & Observability
 
-### ExecutionEngine with Verbose Mode
+### ExecutionEngine - Three Logging Modes
 
-The `ExecutionEngine` provides step-by-step logging and real-time LLM streaming display when `verbose: true` is set.
+The `ExecutionEngine` supports three logging levels:
+
+- **`'silent'`**: No output
+- **`'minimal'`** (default): Basic node progress and completion status
+- **`'verbose'`**: Detailed step-by-step logging with inputs preview and real-time LLM streaming
 
 ```typescript
 import { ExecutionEngine } from "./mod.ts";
 
-const engine = new ExecutionEngine({ verbose: true });
+// Minimal logging (default)
+const engine = new ExecutionEngine();
 const result = await engine.execute(graph);
 
-// Output shows:
-// ● [1/3] math1 (add)
-//   inputs: a=10, b=15
-//   ✓ complete
-// ● [2/3] ai1 (ollama-chat)
-//   ▸ thinking: [streaming thinking content...]
-//   ▸ response: [streaming response content...]
-//   ✓ complete
+// Silent mode - no output
+const silentEngine = new ExecutionEngine({ logLevel: 'silent' });
+
+// Verbose mode - detailed output with streaming
+const verboseEngine = new ExecutionEngine({ logLevel: 'verbose' });
+const result2 = await verboseEngine.execute(graph);
+
+// Backward compatible with verbose boolean
+const legacyVerbose = new ExecutionEngine({ verbose: true }); // Maps to 'verbose'
+const legacySilent = new ExecutionEngine({ verbose: false });  // Maps to 'silent'
+```
+
+Output in verbose mode:
+```
+● [1/3] math1 (add)
+  inputs: a=10, b=15
+  ✓ complete
+● [2/3] ai1 (ollama-chat)
+  ▸ thinking: [streaming thinking content...]
+  ▸ response: [streaming response content...]
+  ✓ complete
+```
+
+### Graph.execute() Options
+
+```typescript
+// Default: minimal logging enabled
+const result = await graph.execute();
+
+// Disable all logging
+const result = await graph.execute(undefined, { logLevel: 'silent' });
+// or using deprecated option:
+const result = await graph.execute(undefined, { silent: true });
 ```
 
 ### DebugExecutionEngine

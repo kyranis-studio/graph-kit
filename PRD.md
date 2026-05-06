@@ -155,9 +155,11 @@ interface ExecutionContext {
 - Execute nodes in topological order
 - Wait for all inputs to be available
 - Support for parallel execution of independent nodes
-- Optional `verbose` mode for step-by-step logging
-- Real-time LLM streaming display (thinking and response) when `verbose: true`
-- Basic execution log showing node progress, inputs preview, and completion status
+- **Minimal logging enabled by default** (`logLevel: 'minimal'`) showing node progress and completion status
+- Three log levels: `'silent'` (no output), `'minimal'` (default, basic progress), `'verbose'` (detailed with streaming)
+- Can be configured via `new ExecutionEngine({ logLevel: 'verbose' })` or `graph.execute(state, { logLevel: 'silent' })`
+- Backward compatible with `verbose: boolean` option
+- Real-time LLM streaming display (thinking and response) only in `verbose` mode
 
 ```typescript
 const engine = new ExecutionEngine({ verbose: true });
@@ -176,8 +178,11 @@ const result = await engine.execute(graph);
 - State-based execution via `Workflow` interface
 - Support for `START` and `END` logic
 - Conditional edges (routing based on state)
-- Optional `verbose` mode for step-by-step execution logging
-- Real-time streaming display for LLM nodes
+- **Minimal logging enabled by default** (`logLevel: 'minimal'`)
+- Three log levels: `'silent'`, `'minimal'` (default), `'verbose'`
+- Configure via `graph.createWorkflow({ startNode, endNode, logLevel: 'verbose' })`
+- Backward compatible with `verbose: boolean` option
+- Real-time streaming display for LLM nodes only in `verbose` mode
 - Human-in-the-loop support via `pause`/`resume` (in planning)
 
 ```typescript
@@ -189,11 +194,17 @@ interface GraphState {
 ```
 
 #### 2.4.3 Execution Control
-- `execute(initialState?)`: Run the graph (via `graph.execute()`)
-- `new ExecutionEngine({ verbose? })`: Create engine with optional verbose logging
-- `engine.execute(graph, initialState?)`: Run with step logging and streaming display
-- `debugEngine.execute(graph, initialState?)`: Run in debug mode with interactive stepping
-- `workflow.run(initialState?)`: Run a defined workflow
+- `execute(initialState?, options?)`: Run the graph (via `graph.execute()`) with minimal logging by default
+  - `options.logLevel: 'silent' | 'minimal' | 'verbose'` to control logging
+  - `options.silent = true` (deprecated, use `logLevel: 'silent'`)
+- `new ExecutionEngine({ logLevel?, verbose? })`: Create engine with specified log level
+  - `logLevel: 'silent'` - no output
+  - `logLevel: 'minimal'` (default) - basic progress and completion
+  - `logLevel: 'verbose'` - detailed step-by-step with streaming display
+  - `verbose: boolean` (legacy) - `true` maps to `'verbose'`, `false` maps to `'silent'`
+- `engine.execute(graph, initialState?)`: Run with configured log level
+- `debugEngine.execute(graph, initialState?)`: Run in debug mode with interactive stepping (always verbose)
+- `workflow.run(initialState?)`: Run a defined workflow with minimal logging by default
 - Event emission for execution lifecycle (nodeStart, nodeComplete, nodeError, llmStreamChunk)
 
 ### 2.5 Middleware System
@@ -493,9 +504,9 @@ if (thinking) {
 }
 ```
 
-### 7.6 ExecutionEngine with Verbose Logging
+### 7.6 ExecutionEngine with Logging Levels
 
-The `ExecutionEngine` provides step-by-step logging and real-time streaming display for LLM nodes.
+The `ExecutionEngine` supports three logging levels: `'silent'`, `'minimal'` (default), and `'verbose'`.
 
 ```typescript
 import { GraphKit, ExecutionEngine, registerOllamaNodes } from './mod.ts';
@@ -505,10 +516,18 @@ registerOllamaNodes(graph);
 
 // ... add nodes with streaming: true ...
 
-const engine = new ExecutionEngine({ verbose: true });
+// Minimal logging (default) - shows node progress and completion
+const engine = new ExecutionEngine();
 const result = await engine.execute(graph);
 
-// Output shows:
+// Silent mode - no output
+const silentEngine = new ExecutionEngine({ logLevel: 'silent' });
+
+// Verbose mode - detailed logging with streaming display
+const verboseEngine = new ExecutionEngine({ logLevel: 'verbose' });
+const result2 = await verboseEngine.execute(graph);
+
+// Output in verbose mode shows:
 // ● [1/3] math1 (add)
 //   inputs: a=10, b=15
 //   ✓ complete
@@ -516,6 +535,9 @@ const result = await engine.execute(graph);
 //   ▸ thinking: [streaming thinking content...]
 //   ▸ response: [streaming response content...]
 //   ✓ complete
+
+// Backward compatible
+const legacyEngine = new ExecutionEngine({ verbose: true }); // Maps to logLevel: 'verbose'
 ```
 
 ---

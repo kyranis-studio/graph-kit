@@ -3,7 +3,7 @@ import { EdgeImpl } from './edge.ts';
 import type { Graph, GraphMetadata, GraphState, NodeTypeDefinition, Workflow, Edge as EdgeType, ExecutionContext, NodeMetadata } from '../types/index.ts';
 import { topologicalSort } from '../algorithms/sorting.ts';
 import { validateGraph } from '../algorithms/validation.ts';
-import { ExecutionEngine } from '../execution/engine.ts';
+import { ExecutionEngine, type LogLevel } from '../execution/engine.ts';
 import { WorkflowImpl } from '../execution/workflow.ts';
 import { toMermaid, toDOT } from '../utils/export.ts';
 
@@ -140,7 +140,15 @@ export class GraphImpl implements Graph {
     return toDOT(this);
   }
 
-  async execute(initialState?: GraphState): Promise<GraphState> {
+  async execute(initialState?: GraphState, options?: { silent?: boolean; logLevel?: LogLevel }): Promise<GraphState> {
+    if (options?.logLevel) {
+      const engine = new ExecutionEngine({ logLevel: options.logLevel });
+      return engine.execute(this, initialState);
+    }
+    if (options?.silent) {
+      const silentEngine = new ExecutionEngine({ logLevel: 'silent' });
+      return silentEngine.execute(this, initialState);
+    }
     return this.#executionEngine.execute(this, initialState);
   }
 

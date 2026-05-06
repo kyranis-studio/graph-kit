@@ -28,32 +28,44 @@ interface StreamState {
   done: boolean;
 }
 
+export type LogLevel = 'silent' | 'minimal' | 'verbose';
+
 export class ExecutionEngine {
-  #verbose: boolean;
+  #logLevel: LogLevel;
   #streamState: Map<string, StreamState> = new Map();
   #lastThinkingLength: Map<string, number> = new Map();
   #lastResponseLength: Map<string, number> = new Map();
   #streamStarted: Map<string, { thinking: boolean; response: boolean }> = new Map();
 
-  constructor(config?: { verbose?: boolean }) {
-    this.#verbose = config?.verbose ?? false;
+  constructor(config?: { verbose?: boolean; logLevel?: LogLevel }) {
+    if (config?.logLevel) {
+      this.#logLevel = config.logLevel;
+    } else if (config?.verbose === true) {
+      this.#logLevel = 'verbose';
+    } else if (config?.verbose === false) {
+      this.#logLevel = 'silent';
+    } else {
+      this.#logLevel = 'minimal';
+    }
   }
 
   async execute(graph: Graph, initialState?: GraphState): Promise<GraphState> {
     const state: GraphState = initialState || { values: new Map(), messages: [] };
     const sortedNodes = topologicalSort(graph);
 
-    if (this.#verbose) {
+    if (this.#logLevel !== 'silent') {
       console.log(`\n${color(' GRAPH EXECUTION ', Colors.bgDarkBlue + Colors.reset)}${color(` ${sortedNodes.length} nodes`, Colors.dim)}`);
-      console.log(color('─'.repeat(50), Colors.dim));
-      console.log(`Order: ${sortedNodes.map((id, i) => color(id, i === 0 ? Colors.green : i === sortedNodes.length - 1 ? Colors.brightMagenta : Colors.blue)).join(color(' → ', Colors.dim))}`);
-      console.log(color('─'.repeat(50), Colors.dim) + '\n');
+      if (this.#logLevel === 'verbose') {
+        console.log(color('─'.repeat(50), Colors.dim));
+        console.log(`Order: ${sortedNodes.map((id, i) => color(id, i === 0 ? Colors.green : i === sortedNodes.length - 1 ? Colors.brightMagenta : Colors.blue)).join(color(' → ', Colors.dim))}`);
+        console.log(color('─'.repeat(50), Colors.dim) + '\n');
+      }
     }
 
     graph.on('llmStreamChunk', (data: unknown) => {
       const chunk = data as { nodeId: string; state: StreamState };
       this.#streamState.set(chunk.nodeId, chunk.state);
-      if (this.#verbose) {
+      if (this.#logLevel === 'verbose') {
         this.#printStreamChunk(chunk);
       }
     });
@@ -71,15 +83,19 @@ export class ExecutionEngine {
 
       Object.assign(inputs, node.data);
 
-      if (this.#verbose) {
+      if (this.#logLevel !== 'silent') {
         const progress = `[${i + 1}/${sortedNodes.length}]`;
-        console.log(`${color('●', Colors.cyan)} ${color(progress, Colors.dim)} ${color(nodeId, Colors.brightCyan)} ${color(`(${node.type})`, Colors.dim)}`);
-        
-        if (Object.keys(inputs).length > 0) {
-          const inputPreview = Object.entries(inputs)
-            .map(([k, v]) => `${k}=${typeof v === 'string' ? `"${v.toString().slice(0, 30)}${v.toString().length > 30 ? '...' : ''}"` : v}`)
-            .join(', ');
-          console.log(`  ${color('inputs:', Colors.dim)} ${inputPreview}`);
+        if (this.#logLevel === 'verbose') {
+          console.log(`${color('●', Colors.cyan)} ${color(progress, Colors.dim)} ${color(nodeId, Colors.brightCyan)} ${color(`(${node.type})`, Colors.dim)}`);
+          
+          if (Object.keys(inputs).length > 0) {
+            const inputPreview = Object.entries(inputs)
+              .map(([k, v]) => `${k}=${typeof v === 'string' ? `"${v.toString().slice(0, 30)}${v.toString().length > 30 ? '...' : ''}"` : v}`)
+              .join(', ');
+            console.log(`  ${color('inputs:', Colors.dim)} ${inputPreview}`);
+          }
+        } else {
+          console.log(`${color('●', Colors.cyan)} ${progress} ${nodeId} (${node.type})`);
         }
       }
 
@@ -103,17 +119,19 @@ export class ExecutionEngine {
 
         await runWithMiddlewares();
         
-        if (this.#verbose) {
+        if (this.#logLevel === 'verbose') {
           const streamInfo = this.#streamState.get(nodeId);
           if (streamInfo) {
             this.#printStreamSummary(streamInfo);
           }
           console.log(`  ${color('✓ complete', Colors.brightGreen)}`);
+        } else if (this.#logLevel === 'minimal') {
+          console.log(`  ${color('✓ complete', Colors.brightGreen)}`);
         }
         
         graph.emit('nodeComplete', { nodeId, output: inputs, inputs });
       } catch (error) {
-        if (this.#verbose) {
+        if (this.#logLevel !== 'silent') {
           console.log(`  ${color('✗ failed: ' + error, Colors.red)}`);
         }
         graph.emit('nodeError', { nodeId, error });
@@ -121,7 +139,7 @@ export class ExecutionEngine {
       }
     }
 
-    if (this.#verbose) {
+    if (this.#logLevel !== 'silent') {
       console.log('\n' + color('─'.repeat(50), Colors.dim));
       console.log(`${color('✓ GRAPH COMPLETE', Colors.bgDarkGreen + Colors.reset)}\n`);
     }

@@ -1,5 +1,6 @@
 import type { Workflow, GraphState, Graph, Node } from '../types/index.ts';
 import { GraphImpl } from '../core/graph.ts';
+import type { LogLevel } from './engine.ts';
 
 const Colors = {
   reset: '\x1b[0m',
@@ -31,19 +32,28 @@ export class WorkflowImpl implements Workflow {
   #endNode: string;
   #onStateUpdate?: (state: GraphState) => void;
   #conditionalEdges: Array<{ sourceNodeId: string; condition: (state: GraphState) => string }> = [];
-  #verbose: boolean;
+  #logLevel: LogLevel;
   #streamState: Map<string, StreamState> = new Map();
   #lastThinkingLength: Map<string, number> = new Map();
   #lastResponseLength: Map<string, number> = new Map();
   #streamStarted: Map<string, { thinking: boolean; response: boolean }> = new Map();
   #stepCount = 0;
 
-  constructor(graph: Graph, config: Parameters<Workflow['addNode']>[1] & { startNode: string; endNode: string; onStateUpdate?: (state: GraphState) => void; verbose?: boolean }) {
+  constructor(graph: Graph, config: Parameters<Workflow['addNode']>[1] & { startNode: string; endNode: string; onStateUpdate?: (state: GraphState) => void; verbose?: boolean; logLevel?: LogLevel }) {
     this.#graph = graph;
     this.#startNode = config.startNode;
     this.#endNode = config.endNode;
     this.#onStateUpdate = config.onStateUpdate;
-    this.#verbose = config.verbose ?? false;
+    
+    if (config.logLevel) {
+      this.#logLevel = config.logLevel;
+    } else if (config.verbose === true) {
+      this.#logLevel = 'verbose';
+    } else if (config.verbose === false) {
+      this.#logLevel = 'silent';
+    } else {
+      this.#logLevel = 'minimal';
+    }
   }
 
   addNode(type: string, config: Parameters<Workflow['addNode']>[1]): Node {
@@ -81,17 +91,19 @@ export class WorkflowImpl implements Workflow {
     const visited = new Set<string>();
     this.#stepCount = 0;
 
-    if (this.#verbose) {
+    if (this.#logLevel !== 'silent') {
       console.log(`\n${color(' WORKFLOW EXECUTION ', Colors.bgDarkBlue + Colors.reset)}`);
-      console.log(color('─'.repeat(50), Colors.dim));
-      console.log(`Start: ${color(this.#startNode, Colors.green)} → End: ${color(this.#endNode, Colors.yellow)}`);
-      console.log(color('─'.repeat(50), Colors.dim) + '\n');
+      if (this.#logLevel === 'verbose') {
+        console.log(color('─'.repeat(50), Colors.dim));
+        console.log(`Start: ${color(this.#startNode, Colors.green)} → End: ${color(this.#endNode, Colors.yellow)}`);
+        console.log(color('─'.repeat(50), Colors.dim) + '\n');
+      }
     }
 
     this.#graph.on('llmStreamChunk', (data: unknown) => {
       const chunk = data as { nodeId: string; state: StreamState };
       this.#streamState.set(chunk.nodeId, chunk.state);
-      if (this.#verbose) {
+      if (this.#logLevel === 'verbose') {
         this.#printStreamChunk(chunk);
       }
     });
@@ -104,8 +116,12 @@ export class WorkflowImpl implements Workflow {
       const node = this.#graph.getNode(currentNodeId);
       if (!node) throw new Error(`Node ${currentNodeId} not found`);
 
-      if (this.#verbose) {
-        console.log(`${color('●', Colors.cyan)} ${color(`[step ${this.#stepCount}]`, Colors.dim)} ${color(currentNodeId, Colors.brightCyan)} ${color(`(${node.type})`, Colors.dim)}`);
+      if (this.#logLevel !== 'silent') {
+        if (this.#logLevel === 'verbose') {
+          console.log(`${color('●', Colors.cyan)} ${color(`[step ${this.#stepCount}]`, Colors.dim)} ${color(currentNodeId, Colors.brightCyan)} ${color(`(${node.type})`, Colors.dim)}`);
+        } else {
+          console.log(`${color('●', Colors.cyan)} [step ${this.#stepCount}] ${currentNodeId} (${node.type})`);
+        }
       }
 
       const inputs: Record<string, unknown> = {};
@@ -117,7 +133,7 @@ export class WorkflowImpl implements Workflow {
 
       Object.assign(inputs, node.data);
 
-      if (this.#verbose && Object.keys(inputs).length > 0) {
+      if (this.#logLevel === 'verbose' && Object.keys(inputs).length > 0) {
         const inputPreview = Object.entries(inputs)
           .map(([k, v]) => `${k}=${typeof v === 'string' ? `"${v.toString().slice(0, 20)}${v.toString().length > 20 ? '...' : ''}"` : v}`)
           .join(', ');
@@ -130,12 +146,16 @@ export class WorkflowImpl implements Workflow {
         state.values.set(`${currentNodeId}.${portId}`, value);
       }
 
-      if (this.#verbose) {
-        const streamInfo = this.#streamState.get(currentNodeId);
-        if (streamInfo) {
-          this.#printStreamSummary(streamInfo);
+      if (this.#logLevel !== 'silent') {
+        if (this.#logLevel === 'verbose') {
+          const streamInfo = this.#streamState.get(currentNodeId);
+          if (streamInfo) {
+            this.#printStreamSummary(streamInfo);
+          }
+          console.log(`  ${color('✓ complete', Colors.brightGreen)}`);
+        } else {
+          console.log(`  ${color('✓ complete', Colors.brightGreen)}`);
         }
-        console.log(`  ${color('✓ complete', Colors.brightGreen)}`);
       }
 
       this.#onStateUpdate?.(state);
@@ -143,22 +163,26 @@ export class WorkflowImpl implements Workflow {
       const conditional = this.#conditionalEdges.find(e => e.sourceNodeId === currentNodeId);
       if (conditional) {
         const nextNodeId = conditional.condition(state);
-        if (this.#verbose) {
+        if (this.#logLevel === 'verbose') {
           console.log(`  ${color('→ condition →', Colors.dim)} ${color(nextNodeId, Colors.yellow)}\n`);
+        } else if (this.#logLevel === 'minimal') {
+          console.log(`  → ${nextNodeId}`);
         }
         currentNodeId = nextNodeId;
       } else {
         const outgoing = this.#graph.getEdgesForNode(currentNodeId).filter(e => e.sourceNodeId === currentNodeId);
         if (!outgoing.length) throw new Error(`No outgoing edges from ${currentNodeId}`);
-        if (this.#verbose) {
+        if (this.#logLevel === 'verbose') {
           const nextNodeId = outgoing[0].targetNodeId;
           console.log(`  ${color('→ next →', Colors.dim)} ${color(nextNodeId, Colors.blue)}\n`);
+        } else if (this.#logLevel === 'minimal') {
+          console.log(`  → ${outgoing[0].targetNodeId}`);
         }
         currentNodeId = outgoing[0].targetNodeId;
       }
     }
 
-    if (this.#verbose) {
+    if (this.#logLevel !== 'silent') {
       console.log(color('─'.repeat(50), Colors.dim));
       console.log(`${color('✓ WORKFLOW COMPLETE', Colors.bgDarkBlue + Colors.reset)} ${color(`(${this.#stepCount} steps)`, Colors.dim)}\n`);
     }
