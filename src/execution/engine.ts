@@ -1,25 +1,6 @@
 import type { Graph, GraphState, ExecutionContext } from '../types/index.ts';
 import { topologicalSort } from '../algorithms/sorting.ts';
-
-const Colors = {
-  reset: '\x1b[0m',
-  dim: '\x1b[2m',
-  gray: '\x1b[90m',
-  white: '\x1b[37m',
-  silver: '\x1b[92m',
-  rose: '\x1b[95m',
-  gold: '\x1b[93m',
-  sky: '\x1b[94m',
-  coral: '\x1b[91m',
-  teal: '\x1b[96m',
-  bgGray: '\x1b[100m',
-  bgRose: '\x1b[45m',
-  bgTeal: '\x1b[46m',
-};
-
-function color(text: string, colorCode: string): string {
-  return `${colorCode}${text}${Colors.reset}`;
-}
+import { Colors, color } from '../utils/colors.ts';
 
 interface StreamState {
   response: string;
@@ -53,7 +34,7 @@ export class ExecutionEngine {
     const sortedNodes = topologicalSort(graph);
 
     if (this.#logLevel !== 'silent') {
-      console.log(`\n${color(' GRAPH EXECUTION ', Colors.bgGray + Colors.reset)}${color(` ${sortedNodes.length} nodes`, Colors.dim)}`);
+      console.log(`\n${color(' GRAPH EXECUTION ', Colors.bgGray + Colors.white)}${color(` ${sortedNodes.length} nodes`, Colors.dim)}`);
       if (this.#logLevel === 'verbose') {
         console.log(color('─'.repeat(50), Colors.dim));
         console.log(`Order: ${sortedNodes.map((id, i) => color(id, i === 0 ? Colors.teal : i === sortedNodes.length - 1 ? Colors.rose : Colors.sky)).join(color(' → ', Colors.dim))}`);
@@ -94,7 +75,7 @@ export class ExecutionEngine {
              console.log(`  ${color('inputs:', Colors.dim)} ${inputPreview}`);
            }
          } else {
-           console.log(`${color('●', Colors.silver)} ${progress} ${nodeId} (${node.type})`);
+           console.log(`${color('●', Colors.silver)} ${color(progress, Colors.dim)} ${color(nodeId, Colors.sky)} ${color(`(${node.type})`, Colors.dim)}`);
          }
       }
 
@@ -140,7 +121,7 @@ export class ExecutionEngine {
 
     if (this.#logLevel !== 'silent') {
       console.log('\n' + color('─'.repeat(50), Colors.dim));
-      console.log(`${color('✓ GRAPH COMPLETE', Colors.bgTeal + Colors.reset)}\n`);
+      console.log(`${color('✓ GRAPH COMPLETE', Colors.bgTeal + Colors.white)}\n`);
     }
 
     graph.emit('graphComplete', { state });
@@ -164,10 +145,10 @@ export class ExecutionEngine {
       const newThinking = thinking.slice(prevThinkingLen);
       if (newThinking.length > 0) {
         if (!started.thinking) {
-          Deno.stdout.writeSync(new TextEncoder().encode(`  ${color('▸ thinking:', Colors.rose + Colors.dim)} `));
+          Deno.stdout.writeSync(new TextEncoder().encode(`  ${color('▸ thinking:', Colors.gray + Colors.dim)} `));
           started.thinking = true;
         }
-        Deno.stdout.writeSync(new TextEncoder().encode(color(newThinking, Colors.rose)));
+        Deno.stdout.writeSync(new TextEncoder().encode(color(newThinking, Colors.gray)));
         this.#lastThinkingLength.set(nodeId, thinking.length);
       }
     }
@@ -196,7 +177,7 @@ export class ExecutionEngine {
   #printStreamSummary(streamInfo: StreamState): void {
     const parts: string[] = [];
     if (streamInfo.thinking) {
-      parts.push(`${color('thinking:', Colors.rose)} ${streamInfo.thinking.length} chars`);
+      parts.push(`${color('thinking:', Colors.gray)} ${streamInfo.thinking.length} chars`);
     }
     parts.push(`${color('response:', Colors.teal)} ${streamInfo.response.length} chars`);
     console.log(`  ${color(parts.join('  '), Colors.dim)}`);

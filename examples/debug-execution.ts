@@ -1,5 +1,6 @@
 import { GraphKit } from "../mod.ts";
 import { DebugExecutionEngine } from "../src/execution/debug-engine.ts";
+import { Colors, color } from "../src/utils/colors.ts";
 
 const graph = GraphKit.createGraph({ metadata: { name: "Debug Example" } });
 
@@ -62,7 +63,7 @@ graph.addEdge({
 // Validate graph
 const errors = graph.validate();
 if (errors.length > 0) {
-  console.error("Graph validation errors:", errors);
+  console.error(color("Graph validation errors:", Colors.coral), errors);
   Deno.exit(1);
 }
 
@@ -71,15 +72,15 @@ const debugEngine = new DebugExecutionEngine({
   stepMode: false,
   onNodeStart: (info) => {
     // Custom hook - could send to monitoring service
-    console.log(`[HOOK] Starting node: ${info.nodeId}`);
+    console.log(color("[HOOK] Starting node:", Colors.rose), color(info.nodeId, Colors.sky));
   },
   onNodeComplete: (info) => {
     console.log(
-      `[HOOK] Completed node: ${info.nodeId} (${info.duration?.toFixed(2)}ms)`,
+      color("[HOOK] Completed node:", Colors.teal), color(info.nodeId, Colors.sky), color(`(${info.nodeType})`, Colors.dim), color(`in ${info.duration?.toFixed(2)}ms`, Colors.gold),
     );
   },
   onNodeError: (info) => {
-    console.error(`[HOOK] Error in node: ${info.nodeId}`, info.error);
+    console.error(color("[HOOK] Error in node:", Colors.coral), color(info.nodeId, Colors.sky), info.error);
   },
 });
 
@@ -87,18 +88,19 @@ const debugEngine = new DebugExecutionEngine({
 graph.use(async (context, next) => {
   const start = Date.now();
   await next();
-  console.log(`[MIDDLEWARE] ${context.nodeId} total: ${Date.now() - start}ms`);
+  console.log(color("[MIDDLEWARE]", Colors.silver), color(context.nodeId, Colors.sky), color(`total: ${Date.now() - start}ms`, Colors.gold));
 });
 
 // Execute with debug engine
 const result = await debugEngine.execute(graph);
 
-console.log("\nFinal state:");
+console.log(color("\nFinal state:", Colors.teal));
 for (const [key, value] of result.values) {
-  console.log(`  ${key}: ${value}`);
+  console.log(`  ${color(key + ":", Colors.sky)} ${color(String(value), Colors.silver)}`);
 }
 
-console.log("\nExecution log:");
+console.log(color("\nExecution log:", Colors.teal));
 for (const entry of debugEngine.executionLog) {
-  console.log(`  ${entry.nodeId} (${entry.nodeType}): ${entry.status}`);
+  const statusColor = entry.status === 'completed' ? Colors.teal : entry.status === 'error' ? Colors.coral : Colors.sky;
+  console.log(`  ${color(entry.nodeId, Colors.sky)} ${color(`(${entry.nodeType})`, Colors.dim)}: ${color(entry.status, statusColor)}`);
 }

@@ -1,4 +1,5 @@
 import { GraphKit } from '../mod.ts';
+import { Colors, color } from '../src/utils/colors.ts';
 
 const graph = GraphKit.createGraph({ metadata: { name: 'AI Workflow - RAG Pipeline' } });
 
@@ -98,9 +99,9 @@ graph.addEdge({ sourceNodeId: 'tech-agent', sourcePortId: 'response', targetNode
 graph.addEdge({ sourceNodeId: 'general-agent', sourcePortId: 'response', targetNodeId: 'end', targetPortId: 'input' });
 
 // Generate and display Mermaid diagram
-console.log('=== AI Workflow RAG Pipeline ===\n');
+console.log(color('=== AI Workflow RAG Pipeline ===', Colors.teal), '\n');
 console.log('```mermaid');
-console.log(graph.toMermaid());
+console.log(color(graph.toMermaid(), Colors.silver));
 console.log('```\n');
 
 // Save to files
@@ -127,17 +128,17 @@ ${graph.toDOT()}
 `;
 
   await Deno.writeTextFile('rag-pipeline.md', markdown);
-  console.log('Saved visualization to rag-pipeline.md');
-  console.log('View it at: https://mermaid.live or any Markdown editor');
+  console.log(color('Saved visualization to rag-pipeline.md', Colors.teal));
+  console.log(color('View it at:', Colors.dim), color('https://mermaid.live', Colors.teal), color('or any Markdown editor', Colors.dim));
 } catch (error) {
   if (error instanceof Deno.errors.PermissionDenied) {
-    console.log('To save files, run with: deno run --allow-read --allow-write examples/mermaid-complex.ts');
+    console.log(color('To save files, run with:', Colors.dim), color('deno run --allow-read --allow-write examples/mermaid-complex.ts', Colors.sky));
   }
 }
 
 // Execute the graph
-console.log('\n=== Executing Graph ===');
+console.log(color('\n=== Executing Graph ===', Colors.teal));
 const result = await graph.execute();
-console.log('Execution complete!');
-console.log('Start query:', result.values.get('start.query'));
-console.log('Rewritten:', result.values.get('rewrite-query.response'));
+console.log(color('Execution complete!', Colors.teal));
+console.log(color('Start query:', Colors.dim), result.values.get('start.query'));
+console.log(color('Rewritten:', Colors.dim), result.values.get('rewrite-query.response'));

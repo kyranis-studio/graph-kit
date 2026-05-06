@@ -1,26 +1,7 @@
 import type { Workflow, GraphState, Graph, Node } from '../types/index.ts';
 import { GraphImpl } from '../core/graph.ts';
 import type { LogLevel } from './engine.ts';
-
-const Colors = {
-  reset: '\x1b[0m',
-  dim: '\x1b[2m',
-  gray: '\x1b[90m',
-  white: '\x1b[37m',
-  silver: '\x1b[92m',
-  rose: '\x1b[95m',
-  gold: '\x1b[93m',
-  sky: '\x1b[94m',
-  coral: '\x1b[91m',
-  teal: '\x1b[96m',
-  bgGray: '\x1b[100m',
-  bgRose: '\x1b[45m',
-  bgTeal: '\x1b[46m',
-};
-
-function color(text: string, colorCode: string): string {
-  return `${colorCode}${text}${Colors.reset}`;
-}
+import { Colors, color } from '../utils/colors.ts';
 
 interface StreamState {
   response: string;
@@ -94,7 +75,7 @@ export class WorkflowImpl implements Workflow {
     this.#stepCount = 0;
 
     if (this.#logLevel !== 'silent') {
-      console.log(`\n${color(' WORKFLOW EXECUTION ', Colors.bgGray + Colors.reset)}`);
+      console.log(`\n${color(' WORKFLOW EXECUTION ', Colors.bgGray + Colors.white)}`);
       if (this.#logLevel === 'verbose') {
         console.log(color('─'.repeat(50), Colors.dim));
         console.log(`Start: ${color(this.#startNode, Colors.teal)} → End: ${color(this.#endNode, Colors.gold)}`);
@@ -122,7 +103,7 @@ export class WorkflowImpl implements Workflow {
         if (this.#logLevel === 'verbose') {
           console.log(`${color('●', Colors.silver)} ${color(`[step ${this.#stepCount}]`, Colors.dim)} ${color(currentNodeId, Colors.sky)} ${color(`(${node.type})`, Colors.dim)}`);
         } else {
-          console.log(`${color('●', Colors.silver)} [step ${this.#stepCount}] ${currentNodeId} (${node.type})`);
+          console.log(`${color('●', Colors.silver)} ${color(`[step ${this.#stepCount}]`, Colors.dim)} ${color(currentNodeId, Colors.sky)} ${color(`(${node.type})`, Colors.dim)}`);
         }
       }
 
@@ -168,7 +149,7 @@ export class WorkflowImpl implements Workflow {
         if (this.#logLevel === 'verbose') {
           console.log(`  ${color('→ condition →', Colors.dim)} ${color(nextNodeId, Colors.gold)}\n`);
         } else if (this.#logLevel === 'minimal') {
-          console.log(`  → ${nextNodeId}`);
+          console.log(`  ${color('→', Colors.dim)} ${color(nextNodeId, Colors.gold)}`);
         }
         currentNodeId = nextNodeId;
       } else {
@@ -178,7 +159,7 @@ export class WorkflowImpl implements Workflow {
           const nextNodeId = outgoing[0].targetNodeId;
           console.log(`  ${color('→ next →', Colors.dim)} ${color(nextNodeId, Colors.sky)}\n`);
         } else if (this.#logLevel === 'minimal') {
-          console.log(`  → ${outgoing[0].targetNodeId}`);
+          console.log(`  ${color('→', Colors.dim)} ${color(outgoing[0].targetNodeId, Colors.sky)}`);
         }
         currentNodeId = outgoing[0].targetNodeId;
       }
@@ -186,7 +167,7 @@ export class WorkflowImpl implements Workflow {
 
     if (this.#logLevel !== 'silent') {
       console.log(color('─'.repeat(50), Colors.dim));
-      console.log(`${color('✓ WORKFLOW COMPLETE', Colors.bgGray + Colors.reset)} ${color(`(${this.#stepCount} steps)`, Colors.dim)}\n`);
+      console.log(`${color('✓ WORKFLOW COMPLETE', Colors.bgTeal + Colors.white)} ${color(`(${this.#stepCount} steps)`, Colors.dim)}\n`);
     }
 
     return state;

@@ -1,6 +1,8 @@
 /**
  * Load environment variables from .env file into Deno.env
  */
+import { Colors, color } from './colors.ts';
+
 export async function loadEnv(path: string = '.env'): Promise<void> {
   try {
     const content = await Deno.readTextFile(path);
@@ -17,7 +19,7 @@ export async function loadEnv(path: string = '.env'): Promise<void> {
       let value = trimmed.slice(equalIndex + 1).trim();
       
       // Remove surrounding quotes if present
-      if ((value.startsWith('"') && value.endsWith('"')) || 
+      if ((value.startsWith('"') && value.endsWith('"')) ||
           (value.startsWith("'") && value.endsWith("'"))) {
         value = value.slice(1, -1);
       }
@@ -26,7 +28,7 @@ export async function loadEnv(path: string = '.env'): Promise<void> {
     }
   } catch (error) {
     if (error instanceof Deno.errors.NotFound) {
-      console.warn(`Warning: ${path} file not found`);
+      console.warn(color(`Warning: ${path} file not found`, Colors.gold));
     } else {
       throw error;
     }

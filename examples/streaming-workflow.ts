@@ -1,6 +1,7 @@
 import { GraphKit } from "../mod.ts";
 import { ExecutionEngine } from "../src/execution/engine.ts";
 import { registerOllamaNodes } from "../ai/mod.ts";
+import { Colors, color } from "../src/utils/colors.ts";
 
 const graph = GraphKit.createGraph({
   metadata: { name: "Streaming LLM Workflow Example" },
@@ -76,22 +77,23 @@ graph.addEdge({
 
 const errors = graph.validate();
 if (errors.length > 0) {
-  console.error("Graph validation errors:", errors);
+  console.error(color("Graph validation errors:", Colors.coral), errors);
   Deno.exit(1);
 }
 
-console.log("Make sure Ollama is running with: ollama serve");
-console.log("Pull model with: ollama pull llama3\n");
+console.log(color("Make sure Ollama is running with:", Colors.dim), color("ollama serve", Colors.teal));
+console.log(color("Pull model with:", Colors.dim), color("ollama pull llama3", Colors.teal), "\n");
 
 const engine = new ExecutionEngine({ verbose: true });
 
 const result = await engine.execute(graph);
 
-console.log("\nFinal state:");
+console.log(color("\nFinal state:", Colors.teal));
 for (const [key, value] of result.values) {
+  const formattedKey = color(`  ${key}:`, Colors.sky);
   if (typeof value === "string" && value.length > 200) {
-    console.log(`  ${key}: ${value.slice(0, 200)}... (${value.length} chars)`);
+    console.log(`${formattedKey} ${value.slice(0, 200)}${color("...", Colors.dim)} (${color(String(value.length), Colors.gold)} chars)`);
   } else {
-    console.log(`  ${key}: ${value}`);
+    console.log(`${formattedKey} ${color(String(value), Colors.silver)}`);
   }
 }

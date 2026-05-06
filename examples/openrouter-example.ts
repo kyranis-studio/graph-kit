@@ -2,6 +2,7 @@
 import { loadEnv } from "../src/utils/dotenv.ts";
 import { GraphKit } from "../mod.ts";
 import { registerOpenRouterNodes } from "../ai/mod.ts";
+import { Colors, color } from "../src/utils/colors.ts";
 
 // Load environment variables from .env file
 await loadEnv();
@@ -26,8 +27,8 @@ const chatNode = graph.addNode("openrouter-chat", {
   },
 });
 
-console.log("Executing OpenRouter workflow with streaming...");
-console.log("Make sure you have OPENROUTER_API_KEY set in your .env file");
+console.log(color("Executing OpenRouter workflow with streaming...", Colors.teal));
+console.log(color("Make sure you have OPENROUTER_API_KEY set in your .env file", Colors.dim));
 
 // Listen for streaming chunks (thinking and response)
 graph.on('llmStreamChunk', ({ nodeId, state }) => {
@@ -37,23 +38,23 @@ graph.on('llmStreamChunk', ({ nodeId, state }) => {
   }
 
   if (state.done) {
-    console.log('\n=== Streaming Complete ===');
+    console.log(color('\n=== Streaming Complete ===', Colors.teal));
     if (state.thinking) {
-      console.log('Thinking:', state.thinking);
+      console.log(color('Thinking:', Colors.rose), state.thinking);
     }
-    console.log('Response:', state.response);
+    console.log(color('Response:', Colors.teal), state.response);
   }
 });
 
 try {
   const result = await graph.execute();
   // Final result is also available via the execution result
-  console.log("\nFinal Response:", result.values.get(`${chatNode.id}.response`));
+  console.log(color("\nFinal Response:", Colors.teal), result.values.get(`${chatNode.id}.response`));
   const thinking = result.values.get(`${chatNode.id}.thinking`);
   if (thinking) {
-    console.log("Thinking:", thinking);
+    console.log(color("Thinking:", Colors.rose), thinking);
   }
-} catch (error) {
-  console.error("Error:", error.message);
-  console.log("Get your API key from: https://openrouter.ai/keys");
+} catch (error: any) {
+  console.error(color("Error:", Colors.coral), error.message);
+  console.log(color("Get your API key from:", Colors.dim), color("https://openrouter.ai/keys", Colors.teal));
 }

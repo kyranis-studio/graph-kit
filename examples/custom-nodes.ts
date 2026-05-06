@@ -1,4 +1,5 @@
 import { GraphKit } from '../mod.ts';
+import { Colors, color } from '../src/utils/colors.ts';
 
 const graph = GraphKit.createGraph({ metadata: { name: 'Custom Nodes Example' } });
 
@@ -39,5 +40,5 @@ graph.addEdge({
 });
 
 const result = await graph.execute();
-console.log('Result:', Object.fromEntries(result.values));
+console.log(color('Result:', Colors.teal), color(JSON.stringify(Object.fromEntries(result.values)), Colors.sky));
 // Should output: { 'greet.message': 'Hello, ALICE!' }

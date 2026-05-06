@@ -1,4 +1,5 @@
 import { GraphKit } from '../mod.ts';
+import { Colors, color } from '../src/utils/colors.ts';
 
 const graph = GraphKit.createGraph({ metadata: { name: 'Mermaid Export Example' } });
 
@@ -74,15 +75,15 @@ graph.addEdge({
 });
 
 // Generate Mermaid diagram
-console.log('=== Mermaid Diagram ===');
-console.log('Copy and paste into https://mermaid.live or a Markdown file:\n');
+console.log(color('=== Mermaid Diagram ===', Colors.teal));
+console.log(color('Copy and paste into https://mermaid.live or a Markdown file:\n', Colors.dim));
 console.log('```mermaid');
-console.log(graph.toMermaid());
+console.log(color(graph.toMermaid(), Colors.silver));
 console.log('```\n');
 
 // Also generate DOT format
-console.log('=== DOT Graph (for Graphviz) ===');
-console.log(graph.toDOT());
+console.log(color('=== DOT Graph (for Graphviz) ===', Colors.teal));
+console.log(color(graph.toDOT(), Colors.silver));
 
 // Save to file if write permission is available
 try {
@@ -102,21 +103,21 @@ ${graph.toDOT()}
 `;
 
   await Deno.writeTextFile('graph-diagram.md', mermaidOutput);
-  console.log('\nSaved to graph-diagram.md');
+  console.log(color('\nSaved to graph-diagram.md', Colors.teal));
 
   // Also save raw mermaid
   await Deno.writeTextFile('graph-diagram.mmd', graph.toMermaid());
-  console.log('Saved raw Mermaid to graph-diagram.mmd');
+  console.log(color('Saved raw Mermaid to graph-diagram.mmd', Colors.teal));
 } catch (error) {
   if (error instanceof Deno.errors.PermissionDenied) {
-    console.log('\nTo save files, run with: deno run --allow-read --allow-write examples/mermaid-export.ts');
+    console.log(color('\nTo save files, run with:', Colors.dim), color('deno run --allow-read --allow-write examples/mermaid-export.ts', Colors.sky));
   }
 }
 
 // Execute the graph to show it works
-console.log('\n=== Executing Graph ===');
+console.log(color('\n=== Executing Graph ===', Colors.teal));
 const result = await graph.execute();
-console.log('Execution complete!');
-console.log('Source output:', result.values.get('source.value'));
-console.log('Process1 output:', result.values.get('process1.output'));
-console.log('Process2 output:', result.values.get('process2.output'));
+console.log(color('Execution complete!', Colors.teal));
+console.log(color('Source output:', Colors.dim), result.values.get('source.value'));
+console.log(color('Process1 output:', Colors.dim), result.values.get('process1.output'));
+console.log(color('Process2 output:', Colors.dim), result.values.get('process2.output'));
