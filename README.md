@@ -7,9 +7,10 @@ GraphKit is a lightweight, TypeScript-first library for building node graph appl
 - **Node System**: Typed units with inputs, outputs, and execution logic
 - **Port System**: Type-safe data flow between nodes
 - **Edge System**: Connect output ports to input ports
-- **Execution Engine**: Sequential and state-based Workflow execution modes
-- **Debug Engine**: Interactive step-through execution with rich CLI feedback
-- **AI-First**: Built-in support for Ollama and OpenAI-compatible providers
+- **Execution Engine**: Sequential execution with minimal logging by default, optional verbose mode, and real-time LLM streaming display
+- **Debug Engine**: Interactive step-through execution with rich CLI feedback and streaming support
+- **Workflow Engine**: State-based execution with conditional edges and verbose step logging
+- **AI-First**: Built-in support for Ollama and OpenAI-compatible providers with streaming and thinking support
 - **Function Calling**: Define tools/functions for LLMs to invoke, with automatic response handling
 - **Visualization**: Export graphs directly to Mermaid and DOT formats
 - **TypeScript Native**: Full strict mode support with generics
@@ -57,9 +58,84 @@ const result = await graph.execute();
 console.log('Final Result:', result.values.get(`${n2.id}.result`)); // 18
 ```
 
-## AI Features (Ollama & OpenAI)
+## AI Features (Ollama, OpenAI & OpenRouter)
 
-Integration with local AI models via Ollama and cloud providers like OpenAI is built-in.
+Integration with local AI models via Ollama, cloud providers like OpenAI, and 200+ models via OpenRouter is built-in.
+
+### Environment Setup
+
+Create a `.env` file in your project root:
+
+```
+OPENAI_API_KEY=sk-...
+OPENROUTER_API_KEY=sk-or-v1-...
+```
+
+Load it in your code:
+
+```typescript
+import { loadEnv } from './src/utils/dotenv.ts';
+await loadEnv();
+```
+
+### OpenRouter Example
+
+```typescript
+import { loadEnv } from './src/utils/dotenv.ts';
+import { GraphKit, registerOpenRouterNodes } from "./mod.ts";
+
+await loadEnv();
+
+const graph = GraphKit.createGraph();
+registerOpenRouterNodes(graph);
+
+// Basic usage (non-streaming)
+const aiNode = graph.addNode("openrouter-chat", {
+  data: {
+    model: "anthropic/claude-3-haiku",  // 200+ models available
+    prompt: "Explain Deno 2",
+    temperature: 0.7,
+  }
+});
+
+const result = await graph.execute();
+console.log("AI Response:", result.values.get(`${aiNode.id}.response`));
+```
+
+### Streaming with Thinking Support
+
+All providers support streaming mode with thinking content for models that expose reasoning (e.g., DeepSeek R1, OpenAI o1, LFM2.5).
+
+```typescript
+import { loadEnv } from './src/utils/dotenv.ts';
+import { GraphKit, registerOpenRouterNodes } from "./mod.ts";
+
+await loadEnv();
+
+const graph = GraphKit.createGraph();
+registerOpenRouterNodes(graph);
+
+const aiNode = graph.addNode("openrouter-chat", {
+  data: {
+    model: "deepseek/deepseek-r1",
+    prompt: "Solve: What is 15 * 23?",
+    streaming: true,
+    temperature: 0.7,
+  }
+});
+
+graph.on('llmStreamChunk', ({ nodeId, state }) => {
+  if (state.thinking) console.log('Thinking:', state.thinking);
+  if (state.done) console.log('Response:', state.response);
+});
+
+const result = await graph.execute();
+console.log("Final Response:", result.values.get(`${aiNode.id}.response`));
+const thinking = result.values.get(`${aiNode.id}.thinking`);
+if (thinking) console.log("Thinking:", thinking);
+```
+
+### Ollama Example
 
 ```typescript
 import { GraphKit, registerOllamaNodes } from "./mod.ts";
@@ -72,12 +148,25 @@ const aiNode = graph.addNode("ollama-chat", {
     model: "granite4.1:3b",
     prompt: "Explain Deno 2",
     temperature: 0.5,
-    streaming: true,
   }
 });
 
 const result = await graph.execute();
 console.log("AI Response:", result.values.get(`${aiNode.id}.response`));
+
+const thinkingNode = graph.addNode("ollama-chat", {
+  data: {
+    model: "lfm2.5-thinking:latest",
+    prompt: "Solve: 10 + 15",
+    streaming: true,
+  }
+});
+
+graph.on('llmStreamChunk', ({ state }) => {
+  if (state.done) console.log('Response:', state.response);
+});
+
+await graph.execute();
 ```
 
 ## Function Calling (Tools)
@@ -123,29 +212,94 @@ See `examples/ai-function-calling.ts` for a complete tool-calling loop.
 
 ## Workflow Execution
 
-For complex, state-based flows with conditional logic, use the `Workflow` API.
+For complex, state-based flows with conditional logic, use the `Workflow` API. Workflows have minimal logging enabled by default, and support three logging levels.
 
 ```typescript
 const workflow = graph.createWorkflow({
   startNode: 'agent1',
   endNode: 'final-output',
+  logLevel: 'minimal', // Default - basic progress logging
 });
 
-workflow.connect('agent1.response', 'router.input');
-
-workflow.addConditionalEdge({
-  sourceNodeId: 'router',
-  condition: (state) => {
-    return state.values.get('router.is_tech') ? 'tech-agent' : 'general-agent';
-  }
+// Silent mode - no output
+const silentWorkflow = graph.createWorkflow({
+  startNode: 'agent1',
+  endNode: 'final-output',
+  logLevel: 'silent',
 });
 
-await workflow.run();
+// Verbose mode - detailed step-by-step logging
+const verboseWorkflow = graph.createWorkflow({
+  startNode: 'agent1',
+  endNode: 'final-output',
+  logLevel: 'verbose',
+});
+
+// Backward compatible with verbose boolean
+const legacyVerbose = graph.createWorkflow({
+  startNode: 'agent1',
+  endNode: 'final-output',
+  verbose: true, // Maps to logLevel: 'verbose'
+});
 ```
+
+See `examples/streaming-workflow.ts` for a complete example with streaming LLM nodes.
 
 ## Debugging & Observability
 
-Use the `DebugExecutionEngine` for interactive debugging. It supports `stepMode` which waits for user input between node executions.
+### ExecutionEngine - Three Logging Modes
+
+The `ExecutionEngine` supports three logging levels:
+
+- **`'silent'`**: No output
+- **`'minimal'`** (default): Basic node progress and completion status
+- **`'verbose'`**: Detailed step-by-step logging with inputs preview and real-time LLM streaming
+
+```typescript
+import { ExecutionEngine } from "./mod.ts";
+
+// Minimal logging (default)
+const engine = new ExecutionEngine();
+const result = await engine.execute(graph);
+
+// Silent mode - no output
+const silentEngine = new ExecutionEngine({ logLevel: 'silent' });
+
+// Verbose mode - detailed output with streaming
+const verboseEngine = new ExecutionEngine({ logLevel: 'verbose' });
+const result2 = await verboseEngine.execute(graph);
+
+// Backward compatible with verbose boolean
+const legacyVerbose = new ExecutionEngine({ verbose: true }); // Maps to 'verbose'
+const legacySilent = new ExecutionEngine({ verbose: false });  // Maps to 'silent'
+```
+
+Output in verbose mode:
+```
+● [1/3] math1 (add)
+  inputs: a=10, b=15
+  ✓ complete
+● [2/3] ai1 (ollama-chat)
+  ▸ thinking: [streaming thinking content...]
+  ▸ response: [streaming response content...]
+  ✓ complete
+```
+
+### Graph.execute() Options
+
+```typescript
+// Default: minimal logging enabled
+const result = await graph.execute();
+
+// Disable all logging
+const result = await graph.execute(undefined, { logLevel: 'silent' });
+// or using deprecated option:
+const result = await graph.execute(undefined, { silent: true });
+```
+
+### DebugExecutionEngine
+
+For interactive debugging with step-through mode, use `DebugExecutionEngine`. It supports `stepMode` which waits for user input (SPACE key) between node executions.
 
 ```typescript
 import { DebugExecutionEngine } from "./mod.ts";
@@ -153,6 +307,7 @@ import { DebugExecutionEngine } from "./mod.ts";
 const debugEngine = new DebugExecutionEngine({
   stepMode: true, // Wait for SPACE key
   onNodeStart: (info) => console.log(`Starting: ${info.nodeId}`),
+  onStreamChunk: (state) => console.log('Stream:', state),
 });
 
 const result = await debugEngine.execute(graph);

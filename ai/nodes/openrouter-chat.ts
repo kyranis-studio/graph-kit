@@ -1,13 +1,13 @@
 import type { NodeTypeDefinition, ExecutionContext } from '../../src/types/index.ts';
-import { createOpenAIProvider } from '../providers/openai.ts';
+import { createOpenRouterProvider } from '../providers/openrouter.ts';
 
-export function getOpenAIChatNodeType(): NodeTypeDefinition {
-  const openai = createOpenAIProvider();
+export function getOpenRouterChatNodeType(): NodeTypeDefinition {
+  const openrouter = createOpenRouterProvider();
 
   return {
     inputs: [
       { id: 'prompt', name: 'Prompt', type: 'string', required: true },
-      { id: 'model', name: 'Model', type: 'string', required: true, defaultValue: 'gpt-4' },
+      { id: 'model', name: 'Model', type: 'string', required: true, defaultValue: 'anthropic/claude-3-haiku' },
       { id: 'temperature', name: 'Temperature', type: 'number', required: false, defaultValue: 0.7 },
       { id: 'systemPrompt', name: 'System Prompt', type: 'string', required: false },
       { id: 'streaming', name: 'Streaming', type: 'boolean', required: false, defaultValue: false },
@@ -29,7 +29,7 @@ export function getOpenAIChatNodeType(): NodeTypeDefinition {
       if (inputs.streaming) {
         (context.config as any).__streaming = true;
 
-        for await (const chunk of openai.streamChat({
+        for await (const chunk of openrouter.streamChat({
           model: inputs.model,
           messages: messages as any,
           temperature: inputs.temperature,
@@ -60,7 +60,7 @@ export function getOpenAIChatNodeType(): NodeTypeDefinition {
           }
         }
       } else {
-        const response = await openai.chat({
+        const response = await openrouter.chat({
           model: inputs.model,
           messages: messages as any,
           temperature: inputs.temperature,
@@ -75,6 +75,6 @@ export function getOpenAIChatNodeType(): NodeTypeDefinition {
         usage,
       };
     },
-    metadata: { label: 'OpenAI Chat', category: 'AI', color: '#10a37f' },
+    metadata: { label: 'OpenRouter Chat', category: 'AI', color: '#f59e0b' },
   };
 }

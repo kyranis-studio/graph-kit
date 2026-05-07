@@ -1,6 +1,7 @@
 import { GraphKit } from "../mod.ts";
 import { DebugExecutionEngine } from "../src/execution/debug-engine.ts";
 import { registerOllamaNodes } from "../ai/mod.ts";
+import { Colors, color, bold } from "../src/utils/colors.ts";
 
 const graph = GraphKit.createGraph({
   metadata: { name: "LFM2.5 Thinking Debug Example" },
@@ -13,7 +14,7 @@ graph.registerNodeType("add", {
     { id: "a", name: "A", type: "number", required: true },
     { id: "b", name: "B", type: "number", required: true },
   ],
-  outputs: [{ id: "result", name: "Result", type: "number" }],
+  outputs: [{ id: "result", name: "Result", type: "number", required: false }],
   execute: async (inputs) => ({
     result: (inputs as any).a + (inputs as any).b,
   }),
@@ -48,38 +49,46 @@ graph.addEdge({
 
 const errors = graph.validate();
 if (errors.length > 0) {
-  console.error("Graph validation errors:", errors);
+  console.error(color("Graph validation errors:", Colors.coral), errors);
   Deno.exit(1);
 }
 
-console.log("Make sure Ollama is running with: ollama serve");
-console.log("Pull model with: ollama pull lfm2.5-thinking:latest");
-console.log("\nControls: SPACE = next node, ESC = cancel\n");
+console.log(color("Make sure Ollama is running with:", Colors.dim), color("ollama serve", Colors.teal));
+console.log(color("Pull model with:", Colors.dim), color("ollama pull lfm2.5-thinking:latest", Colors.teal));
+console.log(color("\nControls: SPACE = next node, ESC = cancel", Colors.gold), "\n");
 
 const debugEngine = new DebugExecutionEngine({
   stepMode: true,
   onNodeStart: (info) => {
-    console.log(`[HOOK] Starting: ${info.nodeId} (${info.nodeType})`);
+    console.log(color("[HOOK]", Colors.rose), color("Starting:", Colors.dim), bold(color(info.nodeId, Colors.sky)), color(`(${info.nodeType})`, Colors.dim));
   },
   onNodeComplete: (info) => {
     console.log(
-      `[HOOK] Completed: ${info.nodeId} in ${info.duration?.toFixed(2)}ms`,
+      color("[HOOK]", Colors.teal), color("Completed:", Colors.dim), bold(color(info.nodeId, Colors.sky)), color(`in ${info.duration?.toFixed(2)}ms`, Colors.gold),
     );
   },
 });
 
 const result = await debugEngine.execute(graph);
 
-console.log("\nFinal state:");
+console.log(color(Colors.line.repeat(60), Colors.dim));
+console.log(`${color(' FINAL STATE ', Colors.bold + Colors.bgTeal + Colors.white)}`);
+console.log(color(Colors.line.repeat(60), Colors.dim));
 for (const [key, value] of result.values) {
+  const formattedKey = color(key, Colors.sky);
   if (typeof value === "string" && value.length > 200) {
-    console.log(`  ${key}: ${value.slice(0, 200)}... (${value.length} chars)`);
+    console.log(`  ${color(Colors.bullet, Colors.sky)} ${formattedKey}${color(':', Colors.dim)} ${value.slice(0, 200)}${color("...", Colors.dim)} (${color(String(value.length), Colors.gold)} chars)`);
   } else {
-    console.log(`  ${key}: ${value}`);
+    console.log(`  ${color(Colors.bullet, Colors.sky)} ${formattedKey}${color(':', Colors.dim)} ${color(String(value), Colors.silver)}`);
   }
 }
 
-console.log("\nExecution log:");
+console.log(`\n${color(Colors.line.repeat(60), Colors.dim)}`);
+console.log(`${color(' EXECUTION LOG ', Colors.bold + Colors.bgGray + Colors.white)}`);
+console.log(color(Colors.line.repeat(60), Colors.dim));
 for (const entry of debugEngine.executionLog) {
-  console.log(`  ${entry.nodeId} (${entry.nodeType}): ${entry.status}`);
+  const statusColor = entry.status === 'completed' ? Colors.teal : entry.status === 'error' ? Colors.coral : Colors.sky;
+  const icon = entry.status === 'completed' ? Colors.check : entry.status === 'error' ? Colors.cross : Colors.dot;
+  console.log(`  ${color(icon, statusColor)} ${bold(color(entry.nodeId, Colors.sky))} ${color(`(${entry.nodeType})`, Colors.dim)}${color(':', Colors.dim)} ${color(entry.status, statusColor)}`);
 }
+console.log(color(Colors.line.repeat(60), Colors.dim) + '\n');

@@ -1,5 +1,6 @@
 import { GraphKit } from "../mod.ts";
 import { DebugExecutionEngine } from "../src/execution/debug-engine.ts";
+import { Colors, color, bold } from "../src/utils/colors.ts";
 
 const graph = GraphKit.createGraph({ metadata: { name: "Debug Example" } });
 
@@ -9,10 +10,11 @@ graph.registerNodeType("add", {
     { id: "a", name: "A", type: "number", required: true },
     { id: "b", name: "B", type: "number", required: true },
   ],
-  outputs: [{ id: "result", name: "Result", type: "number" }],
-  execute: async (inputs) => ({
-    result: (inputs as any).a + (inputs as any).b,
-  }),
+  outputs: [{ id: "result", name: "Result", type: "number", required: false }],
+  execute: async (inputs: unknown) => {
+    const inputRecord = inputs as Record<string, unknown>;
+    return { result: (inputRecord.a as number) + (inputRecord.b as number) };
+  },
 });
 
 graph.registerNodeType("multiply", {
@@ -20,18 +22,19 @@ graph.registerNodeType("multiply", {
     { id: "a", name: "A", type: "number", required: true },
     { id: "b", name: "B", type: "number", required: true },
   ],
-  outputs: [{ id: "result", name: "Result", type: "number" }],
-  execute: async (inputs) => ({
-    result: (inputs as any).a * (inputs as any).b,
-  }),
+  outputs: [{ id: "result", name: "Result", type: "number", required: false }],
+  execute: async (inputs: unknown) => {
+    const inputRecord = inputs as Record<string, unknown>;
+    return { result: (inputRecord.a as number) * (inputRecord.b as number) };
+  },
   metadata: { label: "Multiply Node" },
 });
 
 graph.registerNodeType("log", {
   inputs: [{ id: "value", name: "Value", type: "any", required: true }],
-  outputs: [{ id: "value", name: "Value", type: "any" }],
-  execute: async (inputs) => ({
-    value: inputs.value,
+  outputs: [{ id: "value", name: "Value", type: "any", required: false }],
+  execute: async (inputs: unknown) => ({
+    value: (inputs as Record<string, unknown>).value,
   }),
   metadata: { label: "Logger" },
 });
@@ -62,7 +65,7 @@ graph.addEdge({
 // Validate graph
 const errors = graph.validate();
 if (errors.length > 0) {
-  console.error("Graph validation errors:", errors);
+  console.error(color("Graph validation errors:", Colors.coral), errors);
   Deno.exit(1);
 }
 
@@ -71,15 +74,15 @@ const debugEngine = new DebugExecutionEngine({
   stepMode: false,
   onNodeStart: (info) => {
     // Custom hook - could send to monitoring service
-    console.log(`[HOOK] Starting node: ${info.nodeId}`);
+    console.log(color("[HOOK]", Colors.rose), color("Starting node:", Colors.dim), bold(color(info.nodeId, Colors.sky)));
   },
   onNodeComplete: (info) => {
     console.log(
-      `[HOOK] Completed node: ${info.nodeId} (${info.duration?.toFixed(2)}ms)`,
+      color("[HOOK]", Colors.teal), color("Completed node:", Colors.dim), bold(color(info.nodeId, Colors.sky)), color(`in ${info.duration?.toFixed(2)}ms`, Colors.gold),
     );
   },
   onNodeError: (info) => {
-    console.error(`[HOOK] Error in node: ${info.nodeId}`, info.error);
+    console.error(color("[HOOK]", Colors.coral), bold(color("Error in node:", Colors.coral)), bold(color(info.nodeId, Colors.sky)), info.error);
   },
 });
 
@@ -87,18 +90,25 @@ const debugEngine = new DebugExecutionEngine({
 graph.use(async (context, next) => {
   const start = Date.now();
   await next();
-  console.log(`[MIDDLEWARE] ${context.nodeId} total: ${Date.now() - start}ms`);
+  console.log(color("[MIDDLEWARE]", Colors.silver), bold(color(context.nodeId, Colors.sky)), color(`total: ${Date.now() - start}ms`, Colors.gold));
 });
 
 // Execute with debug engine
 const result = await debugEngine.execute(graph);
 
-console.log("\nFinal state:");
+console.log(color(Colors.line.repeat(60), Colors.dim));
+console.log(`${color(' FINAL STATE ', Colors.bold + Colors.bgTeal + Colors.white)}`);
+console.log(color(Colors.line.repeat(60), Colors.dim));
 for (const [key, value] of result.values) {
-  console.log(`  ${key}: ${value}`);
+  console.log(`  ${color(Colors.bullet, Colors.sky)} ${color(key, Colors.sky)}${color(':', Colors.dim)} ${color(String(value), Colors.silver)}`);
 }
 
-console.log("\nExecution log:");
+console.log(`\n${color(Colors.line.repeat(60), Colors.dim)}`);
+console.log(`${color(' EXECUTION LOG ', Colors.bold + Colors.bgGray + Colors.white)}`);
+console.log(color(Colors.line.repeat(60), Colors.dim));
 for (const entry of debugEngine.executionLog) {
-  console.log(`  ${entry.nodeId} (${entry.nodeType}): ${entry.status}`);
+  const statusColor = entry.status === 'completed' ? Colors.teal : entry.status === 'error' ? Colors.coral : Colors.sky;
+  const icon = entry.status === 'completed' ? Colors.check : entry.status === 'error' ? Colors.cross : Colors.dot;
+  console.log(`  ${color(icon, statusColor)} ${bold(color(entry.nodeId, Colors.sky))} ${color(`(${entry.nodeType})`, Colors.dim)}${color(':', Colors.dim)} ${color(entry.status, statusColor)}`);
 }
+console.log(color(Colors.line.repeat(60), Colors.dim) + '\n');

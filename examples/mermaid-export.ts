@@ -1,4 +1,5 @@
 import { GraphKit } from '../mod.ts';
+import { Colors, color, bold } from '../src/utils/colors.ts';
 
 const graph = GraphKit.createGraph({ metadata: { name: 'Mermaid Export Example' } });
 
@@ -74,15 +75,18 @@ graph.addEdge({
 });
 
 // Generate Mermaid diagram
-console.log('=== Mermaid Diagram ===');
-console.log('Copy and paste into https://mermaid.live or a Markdown file:\n');
-console.log('```mermaid');
-console.log(graph.toMermaid());
-console.log('```\n');
+console.log(`\n${color(Colors.line.repeat(60), Colors.gray)}`);
+console.log(`${color(' GRAPHKIT ', Colors.bold + Colors.bgTeal + Colors.white)} ${bold(color('MERMAID EXPORT', Colors.sky))}`);
+console.log(color(Colors.line.repeat(60), Colors.dim));
+
+console.log(`${color('```mermaid', Colors.dim)}`);
+console.log(color(graph.toMermaid(), Colors.silver));
+console.log(`${color('```', Colors.dim)}\n`);
 
 // Also generate DOT format
-console.log('=== DOT Graph (for Graphviz) ===');
-console.log(graph.toDOT());
+console.log(`${color(' GRAPHKIT ', Colors.bold + Colors.bgGray + Colors.white)} ${bold(color('DOT EXPORT', Colors.sky))}`);
+console.log(color(Colors.line.repeat(60), Colors.dim));
+console.log(color(graph.toDOT(), Colors.silver));
 
 // Save to file if write permission is available
 try {
@@ -102,21 +106,28 @@ ${graph.toDOT()}
 `;
 
   await Deno.writeTextFile('graph-diagram.md', mermaidOutput);
-  console.log('\nSaved to graph-diagram.md');
+  console.log(`\n  ${color(Colors.check, Colors.teal)} ${color('Saved to', Colors.dim)} ${color('graph-diagram.md', Colors.teal)}`);
 
   // Also save raw mermaid
   await Deno.writeTextFile('graph-diagram.mmd', graph.toMermaid());
-  console.log('Saved raw Mermaid to graph-diagram.mmd');
+  console.log(`  ${color(Colors.check, Colors.teal)} ${color('Saved raw Mermaid to', Colors.dim)} ${color('graph-diagram.mmd', Colors.teal)}`);
 } catch (error) {
   if (error instanceof Deno.errors.PermissionDenied) {
-    console.log('\nTo save files, run with: deno run --allow-read --allow-write examples/mermaid-export.ts');
+    console.log(`\n  ${color(Colors.warn, Colors.gold)} ${color('To save files, run with:', Colors.dim)} ${color('deno run --allow-read --allow-write examples/mermaid-export.ts', Colors.sky)}`);
   }
 }
 
 // Execute the graph to show it works
-console.log('\n=== Executing Graph ===');
+console.log(`\n${color(Colors.line.repeat(60), Colors.gray)}`);
+console.log(`${color(' GRAPHKIT ', Colors.bold + Colors.bgGray + Colors.white)} ${bold(color('EXECUTION', Colors.sky))}`);
+console.log(color(Colors.line.repeat(60), Colors.dim));
+
 const result = await graph.execute();
-console.log('Execution complete!');
-console.log('Source output:', result.values.get('source.value'));
-console.log('Process1 output:', result.values.get('process1.output'));
-console.log('Process2 output:', result.values.get('process2.output'));
+
+console.log(`\n${color(Colors.line.repeat(60), Colors.dim)}`);
+console.log(`${color(' RESULTS ', Colors.bold + Colors.bgTeal + Colors.white)}`);
+console.log(color(Colors.line.repeat(60), Colors.dim));
+console.log(`  ${color(Colors.bullet, Colors.sky)} ${color('Source output:', Colors.dim)} ${color(String(result.values.get('source.value') ?? ''), Colors.silver)}`);
+console.log(`  ${color(Colors.bullet, Colors.sky)} ${color('Process1 output:', Colors.dim)} ${color(String(result.values.get('process1.output') ?? ''), Colors.silver)}`);
+console.log(`  ${color(Colors.bullet, Colors.sky)} ${color('Process2 output:', Colors.dim)} ${color(String(result.values.get('process2.output') ?? ''), Colors.silver)}`);
+console.log(color(Colors.line.repeat(60), Colors.dim) + '\n');

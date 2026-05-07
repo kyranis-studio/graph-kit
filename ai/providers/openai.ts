@@ -102,9 +102,8 @@ export function createOpenAIProvider(config: { apiKey?: string; baseUrl?: string
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let fullThinking = '';
     let fullContent = '';
-
-    // Accumulator for tool calls across chunks
     const toolCallAccumulators: Map<number, { id?: string; type?: string; name?: string; arguments: string }> = new Map();
 
     try {
@@ -124,6 +123,9 @@ export function createOpenAIProvider(config: { apiKey?: string; baseUrl?: string
           try {
             const chunk = JSON.parse(trimmed.slice(6));
             const delta = chunk.choices?.[0]?.delta;
+            const thinking = delta?.reasoning_content || delta?.thinking || '';
+
+            if (thinking) fullThinking += thinking;
 
             if (delta?.content) {
               fullContent += delta.content;
@@ -159,8 +161,10 @@ export function createOpenAIProvider(config: { apiKey?: string; baseUrl?: string
 
             yield {
               delta: delta?.content || '',
+              thinking: thinking || undefined,
               done: isDone,
               fullContent,
+              fullThinking: fullThinking || undefined,
               ...(accumulatedToolCalls && isDone ? { tool_calls: accumulatedToolCalls } : {}),
             };
           } catch {

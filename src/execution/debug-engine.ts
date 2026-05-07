@@ -1,59 +1,6 @@
 import type { Graph, GraphState, ExecutionContext } from '../types/index.ts';
 import { topologicalSort } from '../algorithms/sorting.ts';
-
-const Colors = {
-  reset: '\x1b[0m',
-  bold: '\x1b[1m',
-  dim: '\x1b[2m',
-  italic: '\x1b[3m',
-  underline: '\x1b[4m',
-  
-  black: '\x1b[30m',
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  magenta: '\x1b[35m',
-  cyan: '\x1b[36m',
-  white: '\x1b[37m',
-  gray: '\x1b[90m',
-  brightBlue: '\x1b[94m',
-  brightGreen: '\x1b[92m',
-  brightYellow: '\x1b[93m',
-  brightRed: '\x1b[91m',
-  brightMagenta: '\x1b[95m',
-  brightCyan: '\x1b[96m',
-
-  bgDarkBlue: '\x1b[44m',
-  bgDarkGreen: '\x1b[42m',
-  bgDarkRed: '\x1b[41m',
-  bgDarkYellow: '\x1b[43m',
-
-  line: '─',
-  arrow: '▸',
-  bullet: '●',
-  check: '✓',
-  cross: '✗',
-  warn: '⚠',
-  dot: '·',
-};
-
-function color(text: string, colorCode: string): string {
-  return `${colorCode}${text}${Colors.reset}`;
-}
-
-function bold(text: string): string {
-  return `${Colors.bold}${text}${Colors.reset}`;
-}
-
-function dim(text: string): string {
-  return `${Colors.dim}${text}${Colors.reset}`;
-}
-
-function box(label: string, content: string, colorCode: string): string {
-  const border = color(Colors.line.repeat(50), colorCode);
-  return `\n${border}\n${bold(color(` ${label}`, colorCode))}\n${border}\n${content}`;
-}
+import { Colors, color, bold, dim } from '../utils/colors.ts';
 
 export interface NodeDebugInfo {
   nodeId: string;
@@ -228,164 +175,155 @@ export class DebugExecutionEngine {
   }
 
   #printHeader(sortedNodes: string[]): void {
-    const title = color(' GRAPHKIT DEBUG EXECUTION ', Colors.bold + Colors.bgDarkBlue + Colors.white);
-    const nodesInfo = dim(`Nodes: ${sortedNodes.length}`);
-    const order = color('Order:', Colors.dim) + ' ' + sortedNodes.map((id, i) => 
-      color(id, i === 0 ? Colors.green : i === sortedNodes.length - 1 ? Colors.brightMagenta : Colors.blue)
-    ).join(color(' → ', Colors.dim));
-    
-    console.log(`\n${title}\n`);
-    console.log(`  ${nodesInfo}`);
-    console.log(`  ${order}\n`);
+    const firstNode = sortedNodes[0];
+    const lastNode = sortedNodes[sortedNodes.length - 1];
+
+    console.log(`\n${color(Colors.line.repeat(60), Colors.gray)}`);
+    console.log(`${color(' GRAPHKIT ', Colors.bold + Colors.bgGray + Colors.white)} ${bold(color('DEBUG MODE', Colors.sky))}`);
+    console.log(color(Colors.line.repeat(60), Colors.dim));
+    console.log(`  ${color(Colors.dot, Colors.gray)} ${color('Nodes:', Colors.dim)} ${bold(color(String(sortedNodes.length), Colors.sky))}  ${color('First:', Colors.dim)} ${color(firstNode, Colors.teal)}  ${color('Last:', Colors.dim)} ${color(lastNode, Colors.rose)}`);
+
     if (this.#stepMode) {
-      console.log(`  ${color('[SPACE]', Colors.bold + Colors.yellow)} continue  ${color('[ESC]', Colors.bold + Colors.red)} cancel\n`);
+      console.log(`  ${color(Colors.dot, Colors.gray)} ${color('Status:', Colors.dim)} ${color('WAITING FOR INPUT', Colors.gold)}`);
+      console.log(`\n  ${color(Colors.bullet, Colors.gold)} ${color('Press', Colors.dim)} ${color('[SPACE]', Colors.bold + Colors.gold)} ${color('to step', Colors.dim)} ${color('or', Colors.dim)} ${color('[ESC]', Colors.bold + Colors.coral)} ${color('to cancel', Colors.dim)}\n`);
+    } else {
+      console.log(`  ${color(Colors.dot, Colors.gray)} ${color('Status:', Colors.dim)} ${color('AUTO-EXECUTING', Colors.teal)}\n`);
     }
-    console.log(color(Colors.line.repeat(50), Colors.dim));
   }
 
   #printNodeStart(info: NodeDebugInfo, index: number, total: number): void {
-    const progress = `[${index + 1}/${total}]`;
-    const nodeIcon = color(Colors.bullet, Colors.blue);
-    const nodeIdText = bold(color(info.nodeId, Colors.brightCyan));
-    const typeText = dim(`(${info.nodeType})`);
-    const labelText = info.label ? color(` "${info.label}"`, Colors.yellow) : '';
-    
-    console.log(`\n${nodeIcon} ${progress} ${nodeIdText} ${typeText}${labelText}`);
-    console.log(color(Colors.line.repeat(48), Colors.dim));
+    const progress = color(`[${index + 1}/${total}]`, Colors.dim);
+    const nodeIdText = bold(color(info.nodeId, Colors.sky));
+    const typeText = color(`(${info.nodeType})`, Colors.gray);
+    const labelText = info.label ? ` ${color(info.label, Colors.gold)}` : '';
+
+    console.log(`${color(Colors.arrow, Colors.sky)} ${progress} ${nodeIdText} ${typeText}${labelText}`);
 
     if (info.predecessors.length > 0) {
-      console.log(`  ${color('↑ from:', Colors.dim)} ${info.predecessors.map(id => color(id, Colors.green)).join(', ')}`);
-    }
-    if (info.successors.length > 0) {
-      console.log(`  ${color('↓ to:', Colors.dim)} ${info.successors.map(id => color(id, Colors.brightMagenta)).join(', ')}`);
+      const preds = info.predecessors.map(id => color(id, Colors.teal)).join(color(', ', Colors.dim));
+      console.log(`  ${color('in ', Colors.dim)}${preds}`);
     }
 
-    if (Object.keys(info.inputs).length > 0) {
-      console.log(`  ${color('Inputs:', Colors.dim)}`);
-      for (const [key, value] of Object.entries(info.inputs)) {
-        const valueStr = this.#formatValue(value);
-        const preview = valueStr.length > 80 ? valueStr.slice(0, 80) + color('...', Colors.dim) : valueStr;
-        console.log(`    ${color(key, Colors.brightBlue)}: ${dim(preview)}`);
+    const inputEntries = Object.entries(info.inputs);
+    if (inputEntries.length > 0) {
+      for (const [key, value] of inputEntries) {
+        const preview = this.#formatValue(value);
+        console.log(`    ${color(Colors.bullet, Colors.sky)} ${color(key, Colors.gray)} ${color('=', Colors.dim)} ${preview}`);
       }
     }
-    console.log();
   }
 
   #printStreamChunk(chunk: StreamDebugState): void {
     const { nodeId } = chunk;
     const { thinking, response, done } = chunk.state;
-    
+
     if (!this.#streamStarted.has(nodeId)) {
       this.#streamStarted.set(nodeId, { thinking: false, response: false });
     }
     const started = this.#streamStarted.get(nodeId)!;
-    
+
     const prevThinkingLen = this.#lastThinkingLength.get(nodeId) || 0;
     const prevResponseLen = this.#lastResponseLength.get(nodeId) || 0;
-    
+
     const newThinking = thinking ? thinking.slice(prevThinkingLen) : '';
     const newResponse = response.slice(prevResponseLen);
-    
+
     if (thinking && newThinking.length > 0) {
       if (!started.thinking) {
-        Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color('▸ thinking:', Colors.magenta + Colors.dim)} `));
+        Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color('thinking', Colors.italic + Colors.gray)} ${color(Colors.line.repeat(30), Colors.dim)}\n  `));
         started.thinking = true;
       }
-      Deno.stdout.writeSync(new TextEncoder().encode(color(newThinking, Colors.magenta)));
+      Deno.stdout.writeSync(new TextEncoder().encode(color(newThinking, Colors.gray)));
       this.#lastThinkingLength.set(nodeId, thinking.length);
     }
-    
+
     if (newResponse.length > 0) {
       if (!started.response) {
-        Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color('▸ response:', Colors.brightGreen + Colors.dim)} `));
+        const lineLen = Math.max(5, 40 - 'response'.length);
+        Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color('response', Colors.italic + Colors.teal)} ${color(Colors.line.repeat(lineLen), Colors.dim)}\n  `));
         started.response = true;
       }
-      Deno.stdout.writeSync(new TextEncoder().encode(color(newResponse, Colors.brightGreen)));
+      Deno.stdout.writeSync(new TextEncoder().encode(color(newResponse, Colors.teal)));
       this.#lastResponseLength.set(nodeId, response.length);
     }
-    
+
     if (done) {
-      Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${dim('━ stream complete ━')}\n`));
+      Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color(Colors.line.repeat(40), Colors.dim)}\n`));
     }
   }
 
   #printStreamSummary(streamInfo: { response: string; thinking?: string }): void {
-    const parts: string[] = [];
-    if (streamInfo.thinking) {
-      parts.push(`${color('thinking:', Colors.magenta)} ${streamInfo.thinking.length} chars`);
-    }
-    parts.push(`${color('response:', Colors.brightGreen)} ${streamInfo.response.length} chars`);
-    console.log(`  ${dim(parts.join('  '))}`);
+    const thinkingText = streamInfo.thinking ? `${color('thinking', Colors.gray)} ${color(String(streamInfo.thinking.length), Colors.silver)} ` : '';
+    console.log(`  ${color(Colors.dot, Colors.silver)} ${color('stream:', Colors.dim)} ${thinkingText}${color('response', Colors.teal)} ${color(String(streamInfo.response.length), Colors.silver)} ${color('chars', Colors.dim)}`);
   }
 
   #printNodeComplete(info: NodeDebugInfo): void {
-    const icon = color(Colors.check, Colors.brightGreen);
-    const time = color(`${info.duration!.toFixed(1)}ms`, Colors.brightYellow);
-    console.log(`  ${icon} ${dim('done in')} ${time}`);
-    
-    if (info.output && Object.keys(info.output).length > 0) {
-      console.log(`  ${color('Outputs:', Colors.dim)}`);
-      for (const [key, value] of Object.entries(info.output)) {
-        if (key === 'thinking' || key === 'response') continue;
-        const valueStr = this.#formatValue(value);
-        const preview = valueStr.length > 60 ? valueStr.slice(0, 60) + color('...', Colors.dim) : valueStr;
-        console.log(`    ${color(key, Colors.brightBlue)}: ${dim(preview)}`);
+    const time = color(`${info.duration!.toFixed(1)}ms`, Colors.gold);
+    console.log(`  ${color(Colors.check, Colors.teal)} ${color('done', Colors.teal)} ${color('in', Colors.dim)} ${time}`);
+
+    const outputEntries = Object.entries(info.output || {}).filter(([key]) => key !== 'thinking' && key !== 'response');
+    if (outputEntries.length > 0) {
+      for (const [key, value] of outputEntries) {
+        const preview = this.#formatValue(value);
+        console.log(`    ${color(Colors.bullet, Colors.rose)} ${color(key, Colors.gray)} ${color('=', Colors.dim)} ${preview}`);
       }
     }
+    console.log('');
   }
 
   #printNodeError(info: NodeDebugInfo): void {
-    const icon = color(Colors.cross, Colors.brightRed);
-    const time = color(`${info.duration!.toFixed(1)}ms`, Colors.brightRed);
-    console.log(`  ${icon} ${dim('failed after')} ${time}`);
-    console.log(`  ${color('Error:', Colors.brightRed)} ${info.error}`);
+    const time = color(`${info.duration!.toFixed(1)}ms`, Colors.coral);
+    console.log(`  ${color(Colors.cross, Colors.coral)} ${bold(color('FAILED', Colors.coral))} ${color('after', Colors.dim)} ${time}`);
+    console.log(`  ${color('Error:', Colors.coral)} ${color(String(info.error), Colors.silver)}`);
+    console.log('');
   }
 
   #printCancel(total: number): void {
-    console.log(`\n${color(`${Colors.warn} Execution cancelled`, Colors.brightYellow)}`);
-    console.log(dim(`  Completed ${this.#executionLog.filter(n => n.status === 'completed').length}/${total} nodes\n`));
+    const completed = this.#executionLog.filter(n => n.status === 'completed').length;
+    console.log(`\n${color(Colors.warn, Colors.gold)} ${color('CANCELLED', Colors.bold + Colors.bgGray + Colors.white)} ${color('after', Colors.dim)} ${bold(color(String(completed), Colors.teal))} ${color(`of ${total} nodes`, Colors.dim)}\n`);
   }
 
   #printSummary(total: number): void {
     const completed = this.#executionLog.filter(n => n.status === 'completed').length;
     const errors = this.#executionLog.filter(n => n.status === 'error').length;
     const totalDuration = this.#executionLog.reduce((sum, n) => sum + (n.duration ?? 0), 0);
-    
-    const statusColor = errors > 0 ? Colors.brightRed : Colors.brightGreen;
-    const statusText = errors > 0 ? 'FAILED' : this.#cancelled ? 'CANCELLED' : 'SUCCESS';
-    const statusBg = errors > 0 ? Colors.bgDarkRed : Colors.bgDarkGreen;
-    
-    console.log(`\n${color(Colors.line.repeat(50), Colors.dim)}`);
-    console.log(`  ${color(' EXECUTION SUMMARY ', Colors.bold + statusBg + Colors.white)}`);
-    console.log(color(Colors.line.repeat(50), Colors.dim));
-    console.log(`  ${color('Nodes:', Colors.dim)} ${completed}/${total}`);
-    console.log(`  ${color('Errors:', Colors.dim)} ${errors > 0 ? color(String(errors), Colors.brightRed) : color('0', Colors.brightGreen)}`);
-    console.log(`  ${color('Time:', Colors.dim)} ${totalDuration.toFixed(1)}ms`);
-    console.log(`  ${color('Status:', Colors.dim)} ${color(` ${statusText} `, Colors.bold + statusBg + Colors.white)}`);
-    console.log(color(Colors.line.repeat(50), Colors.dim));
-    console.log();
+
+    const statusBg = errors > 0 ? Colors.bgRose : this.#cancelled ? Colors.bgGray : Colors.bgTeal;
+    const statusText = errors > 0 ? ' FAILED ' : this.#cancelled ? ' CANCELLED ' : ' SUCCESS ';
+
+    console.log(`${color(Colors.line.repeat(60), Colors.dim)}`);
+    console.log(`${color(statusText, Colors.bold + statusBg + Colors.white)} ${color('Execution finished in', Colors.dim)} ${bold(color(totalDuration.toFixed(1) + 'ms', Colors.gold))}`);
+    console.log(color(Colors.line.repeat(60), Colors.dim));
+    console.log(`  ${color(Colors.bullet, Colors.teal)} ${color('Completed:', Colors.dim)} ${bold(color(String(completed), Colors.teal))} ${color('/', Colors.dim)} ${color(String(total), Colors.gray)} ${color('nodes', Colors.dim)}`);
+    if (errors > 0) {
+      console.log(`  ${color(Colors.bullet, Colors.coral)} ${color('Errors:', Colors.dim)} ${bold(color(String(errors), Colors.coral))}`);
+    }
+    console.log(`${color(Colors.line.repeat(60), Colors.dim)}\n`);
   }
 
   #formatValue(value: unknown): string {
-    if (value === undefined) return dim('undefined');
-    if (value === null) return dim('null');
-    if (typeof value === 'string') return color(`"${value}"`, Colors.brightGreen);
-    if (typeof value === 'number') return color(String(value), Colors.brightYellow);
-    if (typeof value === 'boolean') return color(String(value), Colors.cyan);
+    if (value === undefined) return color('undefined', Colors.gray);
+    if (value === null) return color('null', Colors.gray);
+    if (typeof value === 'string') {
+      const preview = value.length > 50 ? value.slice(0, 50) + '...' : value;
+      return color(preview, Colors.teal);
+    }
+    if (typeof value === 'number') return color(String(value), Colors.gold);
+    if (typeof value === 'boolean') return color(String(value), Colors.sky);
     if (typeof value === 'object') {
       try {
-        return dim(JSON.stringify(value));
+        const str = JSON.stringify(value);
+        return str && str.length > 50 ? color(str.slice(0, 50) + '...', Colors.gray) : color(str || '', Colors.gray);
       } catch {
-        return dim(String(value));
+        return color(String(value), Colors.gray);
       }
     }
-    return String(value);
+    return color(String(value), Colors.gray);
   }
 
   async #waitForSpaceBar(): Promise<void> {
     return new Promise<void>((resolve) => {
       const buffer = new Uint8Array(1);
-
       Deno.stdin.setRaw(true);
 
       const readKey = async () => {
