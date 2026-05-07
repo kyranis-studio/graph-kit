@@ -10,6 +10,7 @@ GraphKit is a lightweight, TypeScript-first library for building node graph appl
 - **Execution Engine**: Sequential and state-based Workflow execution modes
 - **Debug Engine**: Interactive step-through execution with rich CLI feedback
 - **AI-First**: Built-in support for Ollama and OpenAI-compatible providers
+- **Function Calling**: Define tools/functions for LLMs to invoke, with automatic response handling
 - **Visualization**: Export graphs directly to Mermaid and DOT formats
 - **TypeScript Native**: Full strict mode support with generics
 
@@ -78,6 +79,47 @@ const aiNode = graph.addNode("ollama-chat", {
 const result = await graph.execute();
 console.log("AI Response:", result.values.get(`${aiNode.id}.response`));
 ```
+
+## Function Calling (Tools)
+
+Define functions that the LLM can invoke, execute them, and feed results back in a loop.
+
+```typescript
+import { createOllamaProvider } from "./ai/providers/ollama.ts";
+import type { ToolDefinition, ChatMessage } from "./ai/providers/types.ts";
+
+const weatherTool: ToolDefinition = {
+  type: "function",
+  function: {
+    name: "get_weather",
+    description: "Get the current weather for a location",
+    parameters: {
+      type: "object",
+      properties: {
+        location: { type: "string", description: "City name" },
+        unit: { type: "string", enum: ["celsius", "fahrenheit"] },
+      },
+      required: ["location"],
+    },
+  },
+};
+
+const ollama = createOllamaProvider();
+const messages: ChatMessage[] = [
+  { role: "user", content: "What's the weather in Tokyo?" },
+];
+
+const response = await ollama.chat({ model: "llama3.1", messages, tools: [weatherTool] });
+
+if (response.message.tool_calls) {
+  for (const tc of response.message.tool_calls) {
+    const args = JSON.parse(tc.function.arguments);
+    console.log(`Calling ${tc.function.name}(${JSON.stringify(args)})`);
+  }
+}
+```
+
+See `examples/ai-function-calling.ts` for a complete tool-calling loop.
 
 ## Workflow Execution
 

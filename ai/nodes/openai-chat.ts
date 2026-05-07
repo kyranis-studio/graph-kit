@@ -49,7 +49,7 @@ export function getOpenAIChatNodeType(): NodeTypeDefinition {
           messages: messages as any,
           temperature: inputs.temperature,
         });
-        fullResponse = response.message.content;
+        fullResponse = response.message.content ?? '';
         usage = response.usage;
       }
 

@@ -1,4 +1,4 @@
-import type { AIProvider, ChatMessage, ChatRequest, ChatResponse, StreamChunk } from './types.ts';
+import type { AIProvider, ChatMessage, ChatRequest, ChatResponse, StreamChunk, ToolCall } from './types.ts';
 
 export function createOpenAIProvider(config: { apiKey?: string; baseUrl?: string } = {}) {
   const apiKey = config.apiKey || Deno.env.get('OPENAI_API_KEY');
@@ -13,25 +13,50 @@ export function createOpenAIProvider(config: { apiKey?: string; baseUrl?: string
       ? [{ role: 'system' as const, content: request.systemPrompt }, ...request.messages]
       : request.messages;
 
+    const body: Record<string, unknown> = {
+      model: request.model,
+      messages: messages.map(m => {
+        const msg: Record<string, unknown> = { role: m.role, content: m.content };
+        if (m.tool_calls) msg.tool_calls = m.tool_calls;
+        if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
+        return msg;
+      }),
+      stream: false,
+      temperature: request.temperature,
+      max_tokens: request.maxTokens,
+    };
+
+    if (request.tools) {
+      body.tools = request.tools;
+    }
+
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model: request.model,
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
-        stream: false,
-        temperature: request.temperature,
-        max_tokens: request.maxTokens,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) throw new Error(`OpenAI chat failed: ${response.statusText}`);
     const data = await response.json();
+    const choice = data.choices[0];
+    const toolCalls: ToolCall[] | undefined = choice.message.tool_calls?.map((tc: any) => ({
+      id: tc.id,
+      type: 'function' as const,
+      function: {
+        name: tc.function.name,
+        arguments: tc.function.arguments,
+      },
+    }));
+
     return {
-      message: { role: 'assistant', content: data.choices[0].message.content },
+      message: {
+        role: 'assistant',
+        content: choice.message.content ?? null,
+        ...(toolCalls ? { tool_calls: toolCalls } : {}),
+      },
       usage: data.usage ? {
         promptTokens: data.usage.prompt_tokens,
         completionTokens: data.usage.completion_tokens,
@@ -45,19 +70,30 @@ export function createOpenAIProvider(config: { apiKey?: string; baseUrl?: string
       ? [{ role: 'system' as const, content: request.systemPrompt }, ...request.messages]
       : request.messages;
 
+    const body: Record<string, unknown> = {
+      model: request.model,
+      messages: messages.map(m => {
+        const msg: Record<string, unknown> = { role: m.role, content: m.content };
+        if (m.tool_calls) msg.tool_calls = m.tool_calls;
+        if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
+        return msg;
+      }),
+      stream: true,
+      temperature: request.temperature,
+      max_tokens: request.maxTokens,
+    };
+
+    if (request.tools) {
+      body.tools = request.tools;
+    }
+
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model: request.model,
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
-        stream: true,
-        temperature: request.temperature,
-        max_tokens: request.maxTokens,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) throw new Error(`OpenAI stream chat failed: ${response.statusText}`);
@@ -66,6 +102,10 @@ export function createOpenAIProvider(config: { apiKey?: string; baseUrl?: string
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let fullContent = '';
+
+    // Accumulator for tool calls across chunks
+    const toolCallAccumulators: Map<number, { id?: string; type?: string; name?: string; arguments: string }> = new Map();
 
     try {
       while (true) {
@@ -83,11 +123,45 @@ export function createOpenAIProvider(config: { apiKey?: string; baseUrl?: string
 
           try {
             const chunk = JSON.parse(trimmed.slice(6));
-            const delta = chunk.choices?.[0]?.delta?.content || '';
-            
+            const delta = chunk.choices?.[0]?.delta;
+
+            if (delta?.content) {
+              fullContent += delta.content;
+            }
+
+            if (delta?.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                const index = tc.index;
+                if (!toolCallAccumulators.has(index)) {
+                  toolCallAccumulators.set(index, { arguments: '' });
+                }
+                const acc = toolCallAccumulators.get(index)!;
+                if (tc.id) acc.id = tc.id;
+                if (tc.type) acc.type = tc.type;
+                if (tc.function?.name) acc.name = tc.function.name;
+                if (tc.function?.arguments) acc.arguments += tc.function.arguments;
+              }
+            }
+
+            const finishReason = chunk.choices?.[0]?.finish_reason;
+            const isDone = finishReason !== null && finishReason !== undefined;
+
+            const accumulatedToolCalls: ToolCall[] | undefined = toolCallAccumulators.size > 0
+              ? Array.from(toolCallAccumulators.entries()).map(([index, acc]) => ({
+                  id: acc.id || `call_${index}`,
+                  type: 'function' as const,
+                  function: {
+                    name: acc.name || '',
+                    arguments: acc.arguments,
+                  },
+                }))
+              : undefined;
+
             yield {
-              delta,
-              done: chunk.choices?.[0]?.finish_reason !== null && delta === '',
+              delta: delta?.content || '',
+              done: isDone,
+              fullContent,
+              ...(accumulatedToolCalls && isDone ? { tool_calls: accumulatedToolCalls } : {}),
             };
           } catch {
             // Skip malformed JSON lines

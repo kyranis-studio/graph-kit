@@ -404,7 +404,53 @@ const debugEngine = new DebugExecutionEngine({
 await debugEngine.execute(graph);
 ```
 
-### 7.3 RAG Pipeline Visualization
+### 7.3 AI Function Calling
+
+```typescript
+import { createOllamaProvider } from "../ai/providers/ollama.ts";
+import type { ToolDefinition, ChatMessage } from "../ai/providers/types.ts";
+
+const weatherTool: ToolDefinition = {
+  type: "function",
+  function: {
+    name: "get_weather",
+    description: "Get the current weather for a location",
+    parameters: {
+      type: "object",
+      properties: { location: { type: "string" } },
+      required: ["location"],
+    },
+  },
+};
+
+function getWeather(location: string): string {
+  return `The weather in ${location} is 22°C with clear skies.`;
+}
+
+const ollama = createOllamaProvider();
+const messages: ChatMessage[] = [
+  { role: "user", content: "What's the weather in Tokyo and Paris?" },
+];
+
+// Loop until the LLM responds without tool calls
+for (let i = 0; i < 5; i++) {
+  const res = await ollama.chat({ model: "llama3.1", messages, tools: [weatherTool] });
+
+  if (!res.message.tool_calls) {
+    console.log("Final:", res.message.content);
+    break;
+  }
+
+  messages.push(res.message);
+  for (const tc of res.message.tool_calls) {
+    const args = JSON.parse(tc.function.arguments);
+    const result = getWeather(args.location);
+    messages.push({ role: "tool", content: result, tool_call_id: tc.id });
+  }
+}
+```
+
+### 7.4 RAG Pipeline Visualization
 
 ```typescript
 import { GraphKit, registerOllamaNodes } from './mod.ts';
@@ -419,9 +465,93 @@ console.log(graph.toMermaid());
 ## 8. AI Inference Library Specification (@graph-kit/ai)
 
 ### 8.1 Supported Providers
-- **Ollama**: Local inference, full streaming support
-- **OpenAI**: Compatible with any OpenAI-style API
+- **Ollama**: Local inference, full streaming support, function calling
+- **OpenAI**: Compatible with any OpenAI-style API, function calling
 
-### 8.2 Integration
+### 8.2 Function Calling (Tools)
+Both providers support OpenAI-compatible tool/function calling. Define tool schemas using `ToolDefinition` and pass them via `ChatRequest.tools`. The LLM may respond with `tool_calls` on the response message.
+
+**Types:**
+```typescript
+interface FunctionDefinition {
+  name: string;
+  description?: string;
+  parameters: Record<string, unknown>; // JSON Schema
+}
+
+interface ToolDefinition {
+  type: 'function';
+  function: FunctionDefinition;
+}
+
+interface ToolCall {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    arguments: string; // JSON string
+  };
+}
+```
+
+**Message Flow:**
+1. Send user message + tool definitions → LLM responds with `tool_calls`
+2. Execute the requested function locally using `tc.function.name` and parsed `tc.function.arguments`
+3. Push the assistant's tool_calls message and tool result messages back
+4. LLM incorporates results into a final text response
+
+```typescript
+import { createOllamaProvider } from "./ai/providers/ollama.ts";
+import type { ToolDefinition, ChatMessage } from "./ai/providers/types.ts";
+
+const ollama = createOllamaProvider();
+
+const messages: ChatMessage[] = [
+  { role: "user", content: "What's the weather in Tokyo?" },
+];
+
+const response = await ollama.chat({
+  model: "llama3.1",
+  messages,
+  tools: [{
+    type: "function",
+    function: {
+      name: "get_weather",
+      description: "Get weather for a location",
+      parameters: {
+        type: "object",
+        properties: { location: { type: "string" } },
+        required: ["location"],
+      },
+    },
+  }],
+});
+
+if (response.message.tool_calls) {
+  for (const tc of response.message.tool_calls) {
+    const args = JSON.parse(tc.function.arguments);
+    // Execute local function
+    const result = `Weather in ${args.location}: 22°C`;
+    // Feed result back
+    messages.push(response.message);
+    messages.push({ role: "tool", content: result, tool_call_id: tc.id });
+  }
+  // Get final response
+  const final = await ollama.chat({ model: "llama3.1", messages });
+  console.log(final.message.content);
+}
+```
+
+### 8.3 Integration
 - Exports `registerOllamaNodes(graph)` and `registerOpenAINodes(graph)`
 - Nodes handle all LLM communication; user only provides data/config
+
+### 8.4 Provider API
+
+```typescript
+interface AIProvider {
+  chat(request: ChatRequest): Promise<ChatResponse>;
+  streamChat(request: ChatRequest): AsyncIterable<StreamChunk>;
+  listModels(): Promise<string[]>;
+}
+```
