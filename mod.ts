@@ -2,7 +2,12 @@ import { GraphImpl as Graph } from './src/core/graph.ts';
 import type { GraphConfig, NodeTypeDefinition } from './src/types/index.ts';
 import { registerOllamaNodes, registerOpenAINodes, registerOpenRouterNodes, registerEmbeddingNodes } from './ai/mod.ts';
 
-export const GraphKit = {
+interface GraphKitObject {
+  createGraph(config?: GraphConfig): Graph;
+  fromJSON(json: string, nodeTypes?: Record<string, NodeTypeDefinition>): Graph;
+}
+
+export const GraphKit: GraphKitObject = {
   createGraph(config?: GraphConfig): Graph {
     if (config?.name && !config.metadata) {
       config.metadata = { name: config.name };

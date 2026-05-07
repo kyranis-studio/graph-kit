@@ -160,7 +160,7 @@ export class GraphImpl implements Graph {
     this.#middlewares.push(middleware);
   }
 
-  getMiddlewares() {
+  getMiddlewares(): Array<(context: ExecutionContext, next: () => Promise<void>) => Promise<void>> {
     return this.#middlewares;
   }
 
