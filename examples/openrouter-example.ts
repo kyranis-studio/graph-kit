@@ -1,16 +1,17 @@
-import { loadEnv } from '../src/utils/dotenv.ts';
-import { GraphKit, registerOpenRouterNodes } from '../mod.ts';
+import { loadEnv } from "../src/utils/dotenv.ts";
+import { GraphKit, registerOpenRouterNodes } from "../mod.ts";
 
 await loadEnv();
 
-const graph = GraphKit.createGraph({ name: 'OpenRouter AI' });
+const graph = GraphKit.createGraph({ name: "OpenRouter AI" });
 registerOpenRouterNodes(graph);
 
-const aiNode = graph.addNode('openrouter-chat', {
+const aiNode = graph.addNode("openrouter-chat", {
   data: {
-    model: 'anthropic/claude-3-haiku',
-    prompt: 'What is the capital of France?',
+    model: "openrouter/free",
+    prompt: "Write a small tourism  promo about Tunisia?",
     temperature: 0.7,
+    streaming: true,
   },
 });
 

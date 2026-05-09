@@ -5,7 +5,7 @@ registerOllamaNodes(graph);
 
 const aiNode = graph.addNode("ollama-chat", {
   data: {
-    model: "granite4.1:3b",
+    model: "lfm2.5-thinking:latest",
     prompt: "Explain what a node graph library is in one sentence.",
     temperature: 0.5,
     streaming: true,
