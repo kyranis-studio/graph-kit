@@ -138,10 +138,16 @@ export class ExecutionLogger {
 
   private pad(text: string, bg: string): string {
     const width = this.getWidth();
-    // Strip ANSI codes for length calculation
-    const stripped = text.replace(/\x1b\[[0-9;]*m/g, "");
-    const padding = Math.max(0, width - stripped.length);
-    return `${bg}${text}${" ".repeat(padding)}${Colors.reset}`;
+    return text
+      .split("\n")
+      .map((line) => {
+        const restoredLine = line.replace(/\x1b\[0m/g, `${Colors.reset}${bg}`);
+        const stripped = line.replace(/\x1b\[[0-9;]*m/g, "");
+        const remainder = stripped.length % width;
+        const padding = remainder === 0 && stripped.length > 0 ? 0 : width - remainder;
+        return `${bg}${restoredLine}${" ".repeat(padding)}${Colors.reset}`;
+      })
+      .join("\n");
   }
 
   // --- Level 1: Graph boundaries (bgElevated) ---
@@ -154,6 +160,7 @@ export class ExecutionLogger {
     if (!this.shouldLog("minimal")) return;
 
     console.log();
+    console.log(this.pad("", Colors.bgElevated));
     const title = ` GRAPH EXECUTION START `;
     console.log(
       this.pad(color(bold(title), Colors.textPrimary), Colors.bgElevated),
@@ -176,6 +183,7 @@ export class ExecutionLogger {
         );
       }
     }
+    console.log(this.pad("", Colors.bgElevated));
     console.log();
   }
 
@@ -205,6 +213,7 @@ export class ExecutionLogger {
           : "Graph cancelled";
 
     console.log();
+    console.log(this.pad("", Colors.bgElevated));
     const line = ` ${color(statusIcon, statusColor)} ${color(bold(statusText.toUpperCase()), Colors.textPrimary)}`;
     console.log(this.pad(line, Colors.bgElevated));
 
@@ -216,6 +225,7 @@ export class ExecutionLogger {
         ),
       );
     }
+    console.log(this.pad("", Colors.bgElevated));
     console.log();
   }
 
@@ -236,6 +246,7 @@ export class ExecutionLogger {
     const typeText = color(`(${nodeType})`, Colors.textSecondary);
     const labelText = label ? ` ${color(label, Colors.textMuted)}` : "";
 
+    console.log(this.pad("", Colors.bgSurface));
     console.log(
       this.pad(
         ` ${icon} ${progress} ${idText} ${typeText}${labelText}`,
@@ -308,6 +319,7 @@ export class ExecutionLogger {
         Colors.bgSurface,
       ),
     );
+    console.log(this.pad("", Colors.bgSurface));
     console.log(); // Spacing after node block
   }
 
@@ -320,6 +332,7 @@ export class ExecutionLogger {
         Colors.bgSurface,
       ),
     );
+    console.log(this.pad("", Colors.bgSurface));
     console.log();
   }
 
@@ -348,18 +361,24 @@ export class ExecutionLogger {
     const prevThinkingLen = this.lastThinkingLength.get(nodeId) || 0;
     const prevResponseLen = this.lastResponseLength.get(nodeId) || 0;
 
+    const clearEOL = "\x1b[K";
+
     if (thinking) {
       const newThinking = thinking.slice(prevThinkingLen);
       if (newThinking.length > 0) {
         if (!started.thinking) {
-          const label = `  ${color(Colors.arrow, Colors.accentHighlight)} ${color("thinking:", Colors.accentHighlight)} `;
           Deno.stdout.writeSync(
-            new TextEncoder().encode(Colors.bgAccentTint + label),
+            new TextEncoder().encode(this.pad("", Colors.bgAccentTint) + "\n")
+          );
+          const label = `  ${Colors.accentHighlight}${Colors.arrow}${Colors.reset}${Colors.bgAccentTint} ${Colors.accentHighlight}thinking:${Colors.reset}${Colors.bgAccentTint} `;
+          Deno.stdout.writeSync(
+            new TextEncoder().encode(Colors.bgAccentTint + label + clearEOL),
           );
           started.thinking = true;
         }
+        const formattedThinking = newThinking.replace(/\n/g, clearEOL + "\n" + Colors.bgAccentTint);
         Deno.stdout.writeSync(
-          new TextEncoder().encode(color(newThinking, Colors.textMuted)),
+          new TextEncoder().encode(Colors.bgAccentTint + Colors.textMuted + formattedThinking + clearEOL),
         );
         this.lastThinkingLength.set(nodeId, thinking.length);
       }
@@ -369,22 +388,31 @@ export class ExecutionLogger {
     if (newResponse.length > 0) {
       if (!started.response) {
         if (started.thinking) {
-          Deno.stdout.writeSync(new TextEncoder().encode("\n"));
+          Deno.stdout.writeSync(new TextEncoder().encode(clearEOL + Colors.reset + "\n\n"));
         }
-        const label = `  ${color(Colors.arrow, Colors.success)} ${color("response:", Colors.success)} `;
         Deno.stdout.writeSync(
-          new TextEncoder().encode(Colors.bgAccentTint + label),
+          new TextEncoder().encode(this.pad("", Colors.bgSuccessTint) + "\n")
+        );
+        const label = `  ${Colors.success}${Colors.arrow}${Colors.reset}${Colors.bgSuccessTint} ${Colors.success}response:${Colors.reset}${Colors.bgSuccessTint} `;
+        Deno.stdout.writeSync(
+          new TextEncoder().encode(Colors.bgSuccessTint + label + clearEOL),
         );
         started.response = true;
       }
+      const formattedResponse = newResponse.replace(/\n/g, clearEOL + "\n" + Colors.bgSuccessTint);
       Deno.stdout.writeSync(
-        new TextEncoder().encode(color(newResponse, Colors.textPrimary)),
+        new TextEncoder().encode(Colors.bgSuccessTint + Colors.textPrimary + formattedResponse + clearEOL),
       );
       this.lastResponseLength.set(nodeId, response.length);
     }
 
     if (done) {
-      Deno.stdout.writeSync(new TextEncoder().encode(Colors.reset + "\n"));
+      Deno.stdout.writeSync(new TextEncoder().encode(clearEOL + Colors.reset + "\n"));
+      if (started.response) {
+        console.log(this.pad("", Colors.bgSuccessTint));
+      } else if (started.thinking) {
+        console.log(this.pad("", Colors.bgAccentTint));
+      }
     }
   }
 

@@ -13,6 +13,7 @@ export const Colors = {
   bgGray: "\x1b[48;2;24;24;27m", // #18181b alias for bgSurface
   bgAccent: "\x1b[48;2;98;130;255m", // #6282ff Accent backgrounds
   bgAccentTint: "\x1b[48;2;24;28;44m", // #181c2c Subtle accent tint (12.5% blue)
+  bgSuccessTint: "\x1b[48;2;42;50;37m", // #2a3225 Subtle success tint (12.5% green)
   bgSuccess: "\x1b[48;2;166;228;108m", // #a6e46c Success backgrounds
   bgError: "\x1b[48;2;248;113;113m", // #f87171 Error backgrounds
 
