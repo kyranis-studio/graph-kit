@@ -154,7 +154,7 @@ export class ExecutionLogger {
     const prevThinkingLen = this.lastThinkingLength.get(nodeId) || 0;
     const prevResponseLen = this.lastResponseLength.get(nodeId) || 0;
 
-    if (this.config.logLevel === 'verbose' && thinking) {
+    if (this.config.logLevel !== 'silent' && thinking) {
       const newThinking = thinking.slice(prevThinkingLen);
       if (newThinking.length > 0) {
         if (!started.thinking) {
