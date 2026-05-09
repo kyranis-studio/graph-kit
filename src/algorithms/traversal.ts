@@ -8,7 +8,7 @@ export function bfs(graph: Graph, startNodeId: string): string[] {
   while (queue.length > 0) {
     const nodeId = queue.shift()!;
     if (visited.has(nodeId)) continue;
-    
+
     visited.add(nodeId);
     result.push(nodeId);
 

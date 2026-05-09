@@ -1,9 +1,6 @@
 import type { NodeTypeDefinition } from '../../src/types/index.ts';
-import { createOllamaProvider } from '../providers/ollama.ts';
 
 export function getAIEmbeddingNodeType(): NodeTypeDefinition {
-  const ollama = createOllamaProvider();
-
   return {
     inputs: [
       { id: 'text', name: 'Text', type: 'string', required: true },
@@ -22,7 +19,9 @@ export function getAIEmbeddingNodeType(): NodeTypeDefinition {
         }),
       });
 
-      if (!response.ok) throw new Error(`Embedding failed: ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(`Embedding failed: ${response.statusText}`);
+      }
       const data = await response.json();
       return { embedding: data.embedding };
     },

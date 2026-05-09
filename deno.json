@@ -12,6 +12,7 @@
   },
   "tasks": {
     "test": "deno test --allow-read tests/",
-    "check": "deno check mod.ts ai/mod.ts"
+    "check": "deno check mod.ts ai/mod.ts examples/",
+    "check:all": "deno check mod.ts ai/mod.ts examples/ tests/"
   }
 }

@@ -1,9 +1,6 @@
-// AI Function Calling example - requires Ollama running locally
-// This demonstrates defining tools/functions and having the LLM decide to call them.
 import { createOllamaProvider } from "../ai/providers/ollama.ts";
 import type { ToolDefinition, ChatMessage } from "../ai/providers/types.ts";
 
-// Define weather tool
 const weatherTool: ToolDefinition = {
   type: "function",
   function: {
@@ -12,105 +9,52 @@ const weatherTool: ToolDefinition = {
     parameters: {
       type: "object",
       properties: {
-        location: {
-          type: "string",
-          description: "City name, e.g. San Francisco",
-        },
-        unit: {
-          type: "string",
-          enum: ["celsius", "fahrenheit"],
-          description: "Temperature unit",
-        },
+        location: { type: "string", description: "City name" },
+        unit: { type: "string", enum: ["celsius", "fahrenheit"] },
       },
       required: ["location"],
     },
   },
 };
 
-// Mock function that "gets weather"
-function getWeather(location: string, unit = "celsius"): string {
-  const temps: Record<string, number> = {
-    tokyo: 22,
-    "san francisco": 18,
-    london: 12,
-    paris: 20,
-  };
-  const temp = temps[location.toLowerCase()] ?? 15;
-  const unitLabel = unit === "fahrenheit" ? "F" : "C";
-  return `The weather in ${location} is ${temp}°${unitLabel} with clear skies.`;
+async function getWeather(location: string, unit = "celsius"): Promise<string> {
+  return `The weather in ${location} is 22°${unit === "celsius" ? "C" : "F"} and sunny.`;
 }
 
-// Execute tool calls returned by the LLM
-function executeToolCalls(
-  toolCalls: NonNullable<ChatMessage["tool_calls"]>,
-): ChatMessage[] {
-  return toolCalls.map((tc) => {
-    const args = JSON.parse(tc.function.arguments);
-    let result: string;
+const ollama = createOllamaProvider();
+const messages: ChatMessage[] = [
+  { role: "user", content: "What's the weather in Tokyo?" },
+];
 
-    switch (tc.function.name) {
-      case "get_weather":
-        result = getWeather(args.location, args.unit);
-        break;
-      default:
-        result = `Unknown tool: ${tc.function.name}`;
-    }
+console.log("\n--- Function Calling Loop ---\n");
 
-    return {
-      role: "tool" as const,
-      content: result,
-      tool_call_id: tc.id,
-    };
+let iterations = 0;
+const maxIterations = 5;
+
+while (iterations < maxIterations) {
+  iterations++;
+  const response = await ollama.chat({
+    model: "functiongemma:latest",
+    messages,
+    tools: [weatherTool],
   });
-}
 
-// Main loop: send messages, handle tool calls, repeat
-async function main() {
-  console.log("Make sure Ollama is running on http://localhost:11434\n");
+  if (response.message.tool_calls) {
+    messages.push(response.message);
+    for (const tc of response.message.tool_calls) {
+      const args = JSON.parse(tc.function.arguments);
+      console.log(`  Calling: ${tc.function.name}(${JSON.stringify(args)})`);
 
-  const ollama = createOllamaProvider();
-  const model = "functiongemma";
-
-  const messages: ChatMessage[] = [
-    { role: "user", content: "What's the weather in Tokyo and San Francisco?" },
-  ];
-
-  // Keep going until the LLM responds without tool calls
-  let rounds = 0;
-  while (rounds < 5) {
-    rounds++;
-    console.log(`\n--- Round ${rounds} ---`);
-    console.log("User message:", messages[messages.length - 1].content);
-
-    const response = await ollama.chat({
-      model,
-      messages,
-      tools: [weatherTool],
-    });
-
-    const msg = response.message;
-    console.log("Assistant:", msg.content || "(no text, calling tools...)");
-
-    if (msg.tool_calls) {
-      console.log(
-        "Tool calls:",
-        msg.tool_calls.map((tc) => tc.function.name).join(", "),
-      );
-      messages.push(msg);
-      const toolResults = executeToolCalls(msg.tool_calls);
-      for (const tr of toolResults) {
-        console.log(`Tool result (${tr.tool_call_id}):`, tr.content);
-      }
-      messages.push(...toolResults);
-    } else {
-      console.log("\nFinal response:", msg.content);
-      break;
+      const result = await getWeather(args.location, args.unit);
+      messages.push({
+        role: "tool",
+        content: result,
+        tool_call_id: tc.id,
+      });
+      console.log(`  Result: ${result}\n`);
     }
-  }
-
-  if (rounds >= 5) {
-    console.log("Reached max rounds without final answer.");
+  } else {
+    console.log(`  Final: ${response.message.content}\n`);
+    break;
   }
 }
-
-await main();

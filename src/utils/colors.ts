@@ -1,8 +1,3 @@
-/**
- * Modern muted color palette for CLI output
- * Used across all GraphKit execution engines and logging
- */
-
 export const Colors = {
   reset: '\x1b[0m',
   bold: '\x1b[1m',
@@ -32,7 +27,7 @@ export const Colors = {
   dot: '·',
 } as const;
 
-export type ColorCode = typeof Colors[keyof typeof Colors];
+export type ColorKey = keyof typeof Colors;
 
 export function color(text: string, colorCode: string): string {
   return `${colorCode}${text}${Colors.reset}`;
@@ -46,7 +41,21 @@ export function dim(text: string): string {
   return `${Colors.dim}${text}${Colors.reset}`;
 }
 
-export function box(label: string, content: string, colorCode: string): string {
-  const border = color(Colors.line.repeat(50), colorCode);
-  return `\n${border}\n${bold(color(` ${label}`, colorCode))}\n${border}\n${content}`;
+export function formatValue(value: unknown): string {
+  if (value === undefined) return 'undefined';
+  if (value === null) return 'null';
+  if (typeof value === 'string') {
+    return value.length > 50 ? value.slice(0, 50) + '...' : value;
+  }
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'boolean') return String(value);
+  if (typeof value === 'object') {
+    try {
+      const str = JSON.stringify(value);
+      return str ? (str.length > 50 ? str.slice(0, 50) + '...' : str) : '';
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
 }

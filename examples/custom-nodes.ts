@@ -1,44 +1,30 @@
 import { GraphKit } from '../mod.ts';
-import { Colors, color } from '../src/utils/colors.ts';
 
-const graph = GraphKit.createGraph({ metadata: { name: 'Custom Nodes Example' } });
+const graph = GraphKit.createGraph({ name: 'String Pipeline' });
 
-// Define a string processing node
 graph.registerNodeType('uppercase', {
-  inputs: [
-    { id: 'text', name: 'Text', type: 'string', required: true },
-  ],
-  outputs: [
-    { id: 'result', name: 'Result', type: 'string', required: false },
-  ],
-  execute: async (inputs) => ({
-    result: ((inputs as any).text as string).toUpperCase(),
-  }),
+  inputs: [{ id: 'input', name: 'Input', type: 'string', required: true }],
+  outputs: [{ id: 'output', name: 'Output', type: 'string' }],
+  execute: async (inputs: any) => ({ output: (inputs.input as string).toUpperCase() }),
 });
 
-// Define a greeting node
 graph.registerNodeType('greet', {
-  inputs: [
-    { id: 'name', name: 'Name', type: 'string', required: true },
-  ],
-  outputs: [
-    { id: 'message', name: 'Message', type: 'string', required: false },
-  ],
-  execute: async (inputs) => ({
-    message: `Hello, ${(inputs as any).name}!`,
+  inputs: [{ id: 'name', name: 'Name', type: 'string', required: true }],
+  outputs: [{ id: 'message', name: 'Message', type: 'string' }],
+  execute: async (inputs: any) => ({
+    message: `Hello, ${inputs.name}! Welcome to GraphKit.`,
   }),
 });
 
-const upperNode = graph.addNode('uppercase', { data: { text: 'alice' } });
-const greetNode = graph.addNode('greet');
+const n1 = graph.addNode('uppercase', { data: { input: 'world' } });
+const n2 = graph.addNode('greet', {});
 
 graph.addEdge({
-  sourceNodeId: upperNode.id,
-  sourcePortId: 'result',
-  targetNodeId: greetNode.id,
+  sourceNodeId: n1.id,
+  sourcePortId: 'output',
+  targetNodeId: n2.id,
   targetPortId: 'name',
 });
 
 const result = await graph.execute();
-console.log(color('Result:', Colors.teal), color(JSON.stringify(Object.fromEntries(result.values)), Colors.sky));
-// Should output: { 'greet.message': 'Hello, ALICE!' }
+console.log(`\nGreeting: ${result.values.get(`${n2.id}.message`)}`);

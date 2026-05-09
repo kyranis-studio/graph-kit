@@ -1,5 +1,5 @@
-import { NodeImpl } from "./node.ts";
-import { EdgeImpl } from "./edge.ts";
+import { NodeImpl } from './node.ts';
+import { EdgeImpl } from './edge.ts';
 import type {
   Graph,
   GraphMetadata,
@@ -9,11 +9,12 @@ import type {
   Edge as EdgeType,
   ExecutionContext,
   NodeMetadata,
-} from "../types/index.ts";
-import { validateGraph } from "../algorithms/validation.ts";
-import { ExecutionEngine, type LogLevel } from "../execution/engine.ts";
-import { WorkflowImpl } from "../execution/workflow.ts";
-import { toMermaid, toDOT } from "../utils/export.ts";
+  LogLevel,
+} from '../types/index.ts';
+import { validateGraph } from '../algorithms/validation.ts';
+import { ExecutionEngine } from '../execution/engine.ts';
+import { WorkflowImpl } from '../execution/workflow.ts';
+import { toMermaid, toDOT } from '../utils/export.ts';
 
 export class GraphImpl implements Graph {
   id: string;
@@ -61,7 +62,7 @@ export class GraphImpl implements Graph {
     });
 
     this.nodes.set(node.id, node);
-    this.emit("nodeAdded", { nodeId: node.id });
+    this.emit('nodeAdded', { nodeId: node.id });
     return node;
   }
 
@@ -69,23 +70,25 @@ export class GraphImpl implements Graph {
     const edgesToRemove = this.getEdgesForNode(nodeId).map((e) => e.id);
     edgesToRemove.forEach((id) => this.removeEdge(id));
     this.nodes.delete(nodeId);
-    this.emit("nodeRemoved", { nodeId });
+    this.emit('nodeRemoved', { nodeId });
   }
 
   updateNodeData(nodeId: string, data: Record<string, unknown>): void {
     const node = this.nodes.get(nodeId);
     if (!node) throw new Error(`Node ${nodeId} not found`);
     Object.assign(node.data, data);
-    this.emit("nodeDataUpdated", { nodeId, data });
+    this.emit('nodeDataUpdated', { nodeId, data });
   }
 
-  addEdge(edgeConfig: Omit<EdgeType, "id"> & { id?: string }): EdgeImpl {
+  addEdge(edgeConfig: Omit<EdgeType, 'id'> & { id?: string }): EdgeImpl {
     const sourceNode = this.nodes.get(edgeConfig.sourceNodeId);
     const targetNode = this.nodes.get(edgeConfig.targetNodeId);
-    if (!sourceNode)
+    if (!sourceNode) {
       throw new Error(`Source node ${edgeConfig.sourceNodeId} not found`);
-    if (!targetNode)
+    }
+    if (!targetNode) {
       throw new Error(`Target node ${edgeConfig.targetNodeId} not found`);
+    }
 
     if (!sourceNode.outputs.has(edgeConfig.sourcePortId)) {
       throw new Error(
@@ -100,13 +103,13 @@ export class GraphImpl implements Graph {
 
     const edge = new EdgeImpl(edgeConfig);
     this.edges.set(edge.id, edge);
-    this.emit("edgeAdded", { edgeId: edge.id });
+    this.emit('edgeAdded', { edgeId: edge.id });
     return edge;
   }
 
   removeEdge(edgeId: string): void {
     this.edges.delete(edgeId);
-    this.emit("edgeRemoved", { edgeId });
+    this.emit('edgeRemoved', { edgeId });
   }
 
   getNode(nodeId: string): NodeImpl | undefined {
@@ -120,17 +123,17 @@ export class GraphImpl implements Graph {
   }
 
   getPredecessors(nodeId: string): NodeImpl[] {
-    const edges = this.getEdgesForNode(nodeId).filter(
-      (e) => e.targetNodeId === nodeId,
-    );
-    return edges.map((e) => this.nodes.get(e.sourceNodeId)!).filter(Boolean);
+    return Array.from(this.edges.values())
+      .filter((e) => e.targetNodeId === nodeId)
+      .map((e) => this.nodes.get(e.sourceNodeId)!)
+      .filter(Boolean);
   }
 
   getSuccessors(nodeId: string): NodeImpl[] {
-    const edges = this.getEdgesForNode(nodeId).filter(
-      (e) => e.sourceNodeId === nodeId,
-    );
-    return edges.map((e) => this.nodes.get(e.targetNodeId)!).filter(Boolean);
+    return Array.from(this.edges.values())
+      .filter((e) => e.sourceNodeId === nodeId)
+      .map((e) => this.nodes.get(e.targetNodeId)!)
+      .filter(Boolean);
   }
 
   validate(): string[] {
@@ -138,7 +141,7 @@ export class GraphImpl implements Graph {
   }
 
   toJSON(): string {
-    const graphObj = {
+    return JSON.stringify({
       id: this.id,
       nodes: Array.from(this.nodes.values()).map((n) => ({
         id: n.id,
@@ -157,8 +160,7 @@ export class GraphImpl implements Graph {
         metadata: e.metadata,
       })),
       metadata: this.metadata,
-    };
-    return JSON.stringify(graphObj);
+    });
   }
 
   toMermaid(): string {
@@ -178,17 +180,28 @@ export class GraphImpl implements Graph {
       return engine.execute(this, initialState);
     }
     if (options?.silent) {
-      const silentEngine = new ExecutionEngine({ logLevel: "silent" });
-      return silentEngine.execute(this, initialState);
+      const engine = new ExecutionEngine({ logLevel: 'silent' });
+      return engine.execute(this, initialState);
     }
     return this.#executionEngine.execute(this, initialState);
   }
 
-  createWorkflow(config: Parameters<Graph["createWorkflow"]>[0]): Workflow {
+  createWorkflow(config: {
+    startNode: string;
+    endNode: string;
+    onStateUpdate?: (state: GraphState) => void;
+    verbose?: boolean;
+    logLevel?: LogLevel;
+  }): Workflow {
     return new WorkflowImpl(this, config);
   }
 
-  use(middleware: Parameters<Graph["use"]>[0]): void {
+  use(
+    middleware: (
+      context: ExecutionContext,
+      next: () => Promise<void>,
+    ) => Promise<void>,
+  ): void {
     this.#middlewares.push(middleware);
   }
 
@@ -198,22 +211,28 @@ export class GraphImpl implements Graph {
     return this.#middlewares;
   }
 
+  getRegisteredTypes(): Map<string, NodeTypeDefinition> {
+    return this.#nodeTypes;
+  }
+
   on(event: string, handler: (...args: unknown[]) => void): void {
-    if (!this.#eventHandlers.has(event)) this.#eventHandlers.set(event, []);
+    if (!this.#eventHandlers.has(event)) {
+      this.#eventHandlers.set(event, []);
+    }
     this.#eventHandlers.get(event)!.push(handler);
   }
 
   off(event: string, handler: (...args: unknown[]) => void): void {
     const handlers = this.#eventHandlers.get(event);
-    if (handlers)
+    if (handlers) {
       this.#eventHandlers.set(
         event,
         handlers.filter((h) => h !== handler),
       );
+    }
   }
 
   emit(event: string, ...args: unknown[]): void {
-    const handlers = this.#eventHandlers.get(event);
-    handlers?.forEach((handler) => handler(...args));
+    this.#eventHandlers.get(event)?.forEach((handler) => handler(...args));
   }
 }

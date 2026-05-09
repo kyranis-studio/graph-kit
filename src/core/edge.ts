@@ -8,7 +8,14 @@ export class EdgeImpl implements Edge {
   targetPortId: string;
   metadata?: EdgeMetadata;
 
-  constructor(config: { id?: string; sourceNodeId: string; sourcePortId: string; targetNodeId: string; targetPortId: string; metadata?: EdgeMetadata }) {
+  constructor(config: {
+    id?: string;
+    sourceNodeId: string;
+    sourcePortId: string;
+    targetNodeId: string;
+    targetPortId: string;
+    metadata?: EdgeMetadata;
+  }) {
     this.id = config.id || crypto.randomUUID();
     this.sourceNodeId = config.sourceNodeId;
     this.sourcePortId = config.sourcePortId;

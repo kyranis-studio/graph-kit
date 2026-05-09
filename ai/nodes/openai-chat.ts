@@ -19,7 +19,9 @@ export function getOpenAIChatNodeType(): NodeTypeDefinition {
     ],
     execute: async (inputs: any, context: ExecutionContext) => {
       const messages = [];
-      if (inputs.systemPrompt) messages.push({ role: 'system', content: inputs.systemPrompt });
+      if (inputs.systemPrompt) {
+        messages.push({ role: 'system', content: inputs.systemPrompt });
+      }
       messages.push({ role: 'user', content: inputs.prompt });
 
       let fullResponse = '';
@@ -27,33 +29,31 @@ export function getOpenAIChatNodeType(): NodeTypeDefinition {
       let usage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined;
 
       if (inputs.streaming) {
-        (context.config as any).__streaming = true;
-
         for await (const chunk of openai.streamChat({
           model: inputs.model,
           messages: messages as any,
           temperature: inputs.temperature,
         })) {
-          // Update accumulated content
           if (chunk.fullContent) {
             fullResponse = chunk.fullContent;
           } else if (chunk.delta) {
             fullResponse += chunk.delta;
           }
 
-          // Update thinking content
           if (chunk.fullThinking) {
             fullThinking = chunk.fullThinking;
           } else if (chunk.thinking) {
             fullThinking += chunk.thinking;
           }
 
-          const state = {
-            response: fullResponse,
-            thinking: fullThinking || undefined,
-            done: chunk.done,
-          };
-          context.graph.emit('llmStreamChunk', { nodeId: context.nodeId, state });
+          context.graph.emit('llmStreamChunk', {
+            nodeId: context.nodeId,
+            state: {
+              response: fullResponse,
+              thinking: fullThinking || undefined,
+              done: chunk.done,
+            },
+          });
 
           if (chunk.done && chunk.usage) {
             usage = chunk.usage;

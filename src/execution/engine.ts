@@ -1,194 +1,142 @@
-import type { Graph, GraphState, ExecutionContext } from '../types/index.ts';
+import type { Graph, GraphState, ExecutionContext, LogLevel } from '../types/index.ts';
 import { topologicalSort } from '../algorithms/sorting.ts';
-import { Colors, color, bold } from '../utils/colors.ts';
+import { ExecutionLogger } from './log-engine.ts';
 
-interface StreamState {
-  response: string;
-  thinking?: string;
-  done: boolean;
-}
-
-export type LogLevel = 'silent' | 'minimal' | 'verbose';
+export type { LogLevel };
 
 export class ExecutionEngine {
-  #logLevel: LogLevel;
-  #streamState: Map<string, StreamState> = new Map();
-  #lastThinkingLength: Map<string, number> = new Map();
-  #lastResponseLength: Map<string, number> = new Map();
-  #streamStarted: Map<string, { thinking: boolean; response: boolean }> = new Map();
+  private logger: ExecutionLogger;
 
   constructor(config?: { verbose?: boolean; logLevel?: LogLevel }) {
+    let level: LogLevel = 'minimal';
     if (config?.logLevel) {
-      this.#logLevel = config.logLevel;
+      level = config.logLevel;
     } else if (config?.verbose === true) {
-      this.#logLevel = 'verbose';
+      level = 'verbose';
     } else if (config?.verbose === false) {
-      this.#logLevel = 'silent';
-    } else {
-      this.#logLevel = 'minimal';
+      level = 'silent';
     }
+    this.logger = new ExecutionLogger({ logLevel: level });
   }
 
   async execute(graph: Graph, initialState?: GraphState): Promise<GraphState> {
-    const state: GraphState = initialState || { values: new Map(), messages: [] };
+    const state: GraphState = initialState || {
+      values: new Map(),
+      messages: [],
+    };
     const sortedNodes = topologicalSort(graph);
 
-    if (this.#logLevel !== 'silent') {
-      console.log(`\n${color(Colors.line.repeat(50), Colors.gray)}`);
-      console.log(`${color(' GRAPHKIT ', Colors.bold + Colors.bgGray + Colors.white)} ${bold(color('EXECUTION', Colors.sky))}${color(` ${sortedNodes.length} nodes`, Colors.dim)}`);
-      
-      if (this.#logLevel === 'verbose') {
-        console.log(color(Colors.line.repeat(50), Colors.dim));
-        const order = sortedNodes.map((id, i) => color(id, i === 0 ? Colors.teal : i === sortedNodes.length - 1 ? Colors.rose : Colors.sky)).join(color(' → ', Colors.dim));
-        console.log(`  ${color(Colors.dot, Colors.gray)} ${color('Order:', Colors.dim)} ${order}`);
-        console.log(color(Colors.line.repeat(50), Colors.dim) + '\n');
-      } else {
-        console.log(color(Colors.line.repeat(50), Colors.dim) + '\n');
-      }
-    }
-
-    graph.on('llmStreamChunk', (data: unknown) => {
-      const chunk = data as { nodeId: string; state: StreamState };
-      this.#streamState.set(chunk.nodeId, chunk.state);
-      if (this.#logLevel !== 'silent') {
-        this.#printStreamChunk(chunk);
-      }
+    this.logger.printHeader('EXECUTION', sortedNodes.length, {
+      Order: sortedNodes.length > 0
+        ? `${sortedNodes[0]} → ${sortedNodes[sortedNodes.length - 1]}`
+        : 'none',
     });
+
+    const offStream = this.attachStreamHandler(graph);
 
     for (let i = 0; i < sortedNodes.length; i++) {
       const nodeId = sortedNodes[i];
       const node = graph.getNode(nodeId)!;
-      const inputs: Record<string, unknown> = {};
-      
-      const incomingEdges = graph.getEdgesForNode(nodeId).filter(e => e.targetNodeId === nodeId);
-      for (const edge of incomingEdges) {
-        const sourceOutputKey = `${edge.sourceNodeId}.${edge.sourcePortId}`;
-        inputs[edge.targetPortId] = state.values.get(sourceOutputKey);
-      }
+      const inputs = this.resolveInputs(graph, nodeId, state);
 
       Object.assign(inputs, node.data);
 
-      if (this.#logLevel !== 'silent') {
-        const progress = color(`[${i + 1}/${sortedNodes.length}]`, Colors.dim);
-        const nodeIdText = bold(color(nodeId, Colors.sky));
-        const typeText = color(`(${node.type})`, Colors.gray);
-        
-        console.log(`${color(Colors.arrow, Colors.sky)} ${progress} ${nodeIdText} ${typeText}`);
-
-        if (this.#logLevel === 'verbose' && Object.keys(inputs).length > 0) {
-           for (const [k, v] of Object.entries(inputs)) {
-             const preview = typeof v === 'string' ? `"${v.slice(0, 40)}${v.length > 40 ? '...' : ''}"` : String(v);
-             console.log(`    ${color(Colors.bullet, Colors.sky)} ${color(k, Colors.gray)} ${color('=', Colors.dim)} ${color(preview, Colors.silver)}`);
-           }
-         }
-      }
+      this.logger.printNodeStart(nodeId, node.type, i + 1, sortedNodes.length);
+      this.logger.printNodeInputs(inputs);
 
       const startTime = performance.now();
       graph.emit('nodeStart', { nodeId, inputs });
+
       try {
-        const context: ExecutionContext = { graph, nodeId, state, config: node.data };
-        const middlewares = (graph as any).getMiddlewares();
-        let middlewareIndex = 0;
-
-        const runWithMiddlewares = async () => {
-          if (middlewareIndex < middlewares.length) {
-            const middleware = middlewares[middlewareIndex++];
-            await middleware(context, runWithMiddlewares);
-          } else {
-            const output = await node.execute(inputs, context);
-            for (const [portId, value] of Object.entries(output as Record<string, unknown>)) {
-              state.values.set(`${nodeId}.${portId}`, value);
-            }
-          }
+        const context: ExecutionContext = {
+          graph,
+          nodeId,
+          state,
+          config: node.data,
         };
+        const middlewares = (graph as any).getMiddlewares?.() || [];
+        await this.runWithMiddlewares(
+          middlewares,
+          context,
+          node,
+          inputs,
+          state,
+        );
 
-        await runWithMiddlewares();
         const duration = performance.now() - startTime;
-        
-        if (this.#logLevel !== 'silent') {
-          const time = color(`${duration.toFixed(1)}ms`, Colors.gold);
-          if (this.#logLevel === 'verbose') {
-            const streamInfo = this.#streamState.get(nodeId);
-            if (streamInfo) {
-              this.#printStreamSummary(streamInfo);
-            }
-            console.log(`  ${color(Colors.check, Colors.teal)} ${color('done', Colors.teal)} ${color('in', Colors.dim)} ${time}\n`);
-          } else {
-            console.log(`  ${color(Colors.check, Colors.teal)} ${color('done', Colors.teal)} ${color('in', Colors.dim)} ${time}`);
-          }
-        }
-        
+        this.logger.printStreamSummary(nodeId);
+        this.logger.printNodeDone(duration);
         graph.emit('nodeComplete', { nodeId, output: inputs, inputs });
       } catch (error) {
-        if (this.#logLevel !== 'silent') {
-          console.log(`  ${color(Colors.cross, Colors.coral)} ${bold(color('FAILED', Colors.coral))}: ${color(String(error), Colors.silver)}\n`);
-        }
+        this.logger.printNodeError(error);
         graph.emit('nodeError', { nodeId, error });
+        offStream();
         throw error;
       }
     }
 
-    if (this.#logLevel !== 'silent') {
-      console.log(color(Colors.line.repeat(50), Colors.dim));
-      console.log(`${color(' COMPLETED ', Colors.bold + Colors.bgTeal + Colors.white)}\n`);
-    }
-
+    offStream();
+    this.logger.printFooter('success', [
+      `${sortedNodes.length} nodes executed`,
+    ]);
     graph.emit('graphComplete', { state });
     return state;
   }
 
-  #printStreamChunk(chunk: { nodeId: string; state: StreamState }): void {
-    const { nodeId } = chunk;
-    const { thinking, response, done } = chunk.state;
-    
-    if (!this.#streamStarted.has(nodeId)) {
-      this.#streamStarted.set(nodeId, { thinking: false, response: false });
+  private resolveInputs(
+    graph: Graph,
+    nodeId: string,
+    state: GraphState,
+  ): Record<string, unknown> {
+    const inputs: Record<string, unknown> = {};
+    const incomingEdges = graph
+      .getEdgesForNode(nodeId)
+      .filter((e) => e.targetNodeId === nodeId);
+    for (const edge of incomingEdges) {
+      const key = `${edge.sourceNodeId}.${edge.sourcePortId}`;
+      inputs[edge.targetPortId] = state.values.get(key);
     }
-    const started = this.#streamStarted.get(nodeId)!;
-    
-    const prevThinkingLen = this.#lastThinkingLength.get(nodeId) || 0;
-    const prevResponseLen = this.#lastResponseLength.get(nodeId) || 0;
-    
-    // Only show thinking in verbose mode
-    if (this.#logLevel === 'verbose' && thinking) {
-      const newThinking = thinking.slice(prevThinkingLen);
-      if (newThinking.length > 0) {
-        if (!started.thinking) {
-          Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color('thinking', Colors.italic + Colors.gray)} ${color(Colors.line.repeat(30), Colors.dim)}\n  `));
-          started.thinking = true;
-        }
-        Deno.stdout.writeSync(new TextEncoder().encode(color(newThinking, Colors.gray)));
-        this.#lastThinkingLength.set(nodeId, thinking.length);
-      }
-    }
-
-    // Show response in both minimal and verbose modes
-    const newResponse = response.slice(prevResponseLen);
-    if (newResponse.length > 0) {
-      if (!started.response) {
-        if (this.#logLevel === 'verbose') {
-          const lineLen = Math.max(5, 40 - 'response'.length);
-          Deno.stdout.writeSync(new TextEncoder().encode(`\n  ${color('response', Colors.italic + Colors.teal)} ${color(Colors.line.repeat(lineLen), Colors.dim)}\n  `));
-        } else {
-          Deno.stdout.writeSync(new TextEncoder().encode(`  `));
-        }
-        started.response = true;
-      }
-      Deno.stdout.writeSync(new TextEncoder().encode(color(newResponse, Colors.teal)));
-      this.#lastResponseLength.set(nodeId, response.length);
-    }
-    
-    if (done) {
-      Deno.stdout.writeSync(new TextEncoder().encode(`\n`));
-    }
+    return inputs;
   }
 
-  #printStreamSummary(streamInfo: StreamState): void {
-    const parts: string[] = [];
-    if (streamInfo.thinking) {
-      parts.push(`${color('thinking', Colors.gray)} ${color(String(streamInfo.thinking.length), Colors.silver)}`);
-    }
-    parts.push(`${color('response', Colors.teal)} ${color(String(streamInfo.response.length), Colors.silver)}`);
-    console.log(`  ${color(Colors.dot, Colors.silver)} ${color('stream:', Colors.dim)} ${parts.join(color('  ', Colors.dim))} ${color('chars', Colors.dim)}`);
+  private attachStreamHandler(graph: Graph): () => void {
+    const handler = (data: unknown) => {
+      const chunk = data as {
+        nodeId: string;
+        state: { response: string; thinking?: string; done: boolean };
+      };
+      this.logger.handleStreamChunk(chunk);
+    };
+    graph.on('llmStreamChunk', handler);
+    return () => graph.off('llmStreamChunk', handler);
+  }
+
+  private async runWithMiddlewares(
+    middlewares: Array<
+      (context: ExecutionContext, next: () => Promise<void>) => Promise<void>
+    >,
+    context: ExecutionContext,
+    node: { execute: (inputs: unknown, ctx: ExecutionContext) => unknown },
+    inputs: Record<string, unknown>,
+    state: GraphState,
+  ): Promise<void> {
+    let middlewareIndex = 0;
+
+    const run = async (): Promise<void> => {
+      if (middlewareIndex < middlewares.length) {
+        const mw = middlewares[middlewareIndex++];
+        await mw(context, run);
+      } else {
+        const output = (await node.execute(
+          inputs,
+          context,
+        )) as Record<string, unknown>;
+        for (const [portId, value] of Object.entries(output)) {
+          state.values.set(`${context.nodeId}.${portId}`, value);
+        }
+      }
+    };
+
+    await run();
   }
 }

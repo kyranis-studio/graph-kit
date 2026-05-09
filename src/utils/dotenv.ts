@@ -1,24 +1,20 @@
-/**
- * Load environment variables from .env file into Deno.env
- */
-import { Colors, color } from "./colors.ts";
+import { Colors, color } from './colors.ts';
 
-export async function loadEnv(path: string = ".env"): Promise<void> {
+export async function loadEnv(path = '.env'): Promise<void> {
   try {
     const content = await Deno.readTextFile(path);
-    const lines = content.split("\n");
+    const lines = content.split('\n');
 
     for (const line of lines) {
       const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
+      if (!trimmed || trimmed.startsWith('#')) continue;
 
-      const equalIndex = trimmed.indexOf("=");
+      const equalIndex = trimmed.indexOf('=');
       if (equalIndex === -1) continue;
 
       const key = trimmed.slice(0, equalIndex).trim();
       let value = trimmed.slice(equalIndex + 1).trim();
 
-      // Remove surrounding quotes if present
       if (
         (value.startsWith('"') && value.endsWith('"')) ||
         (value.startsWith("'") && value.endsWith("'"))

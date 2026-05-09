@@ -1,24 +1,27 @@
 import { GraphKit } from '../mod.ts';
-import { Colors, color } from '../src/utils/colors.ts';
 
-const graph = GraphKit.createGraph({ metadata: { name: 'Basic Example' } });
+const graph = GraphKit.createGraph({ name: 'Basic Math' });
 
-// Define a simple math node
 graph.registerNodeType('add', {
   inputs: [
     { id: 'a', name: 'A', type: 'number', required: true },
     { id: 'b', name: 'B', type: 'number', required: true },
   ],
-  outputs: [
-    { id: 'result', name: 'Result', type: 'number', required: false },
+  outputs: [{ id: 'result', name: 'Result', type: 'number' }],
+  execute: async (inputs: any) => ({ result: inputs.a + inputs.b }),
+});
+
+graph.registerNodeType('multiply', {
+  inputs: [
+    { id: 'a', name: 'A', type: 'number', required: true },
+    { id: 'b', name: 'B', type: 'number', required: true },
   ],
-  execute: async (inputs) => ({
-    result: (inputs as any).a + (inputs as any).b,
-  }),
+  outputs: [{ id: 'result', name: 'Result', type: 'number' }],
+  execute: async (inputs: any) => ({ result: inputs.a * inputs.b }),
 });
 
 const n1 = graph.addNode('add', { data: { a: 5, b: 3 } });
-const n2 = graph.addNode('add');
+const n2 = graph.addNode('multiply', { data: { b: 10 } });
 
 graph.addEdge({
   sourceNodeId: n1.id,
@@ -27,10 +30,6 @@ graph.addEdge({
   targetPortId: 'a',
 });
 
-// Set n2's b input
-graph.updateNodeData(n2.id, { b: 10 });
-
-// Execute
 const result = await graph.execute();
-console.log(color('Result:', Colors.teal), color(JSON.stringify(Object.fromEntries(result.values)), Colors.sky));
-// Should output: { 'n2.result': 18 } (8 + 10)
+console.log(`\nFinal Result: ${result.values.get(`${n2.id}.result`)}`);
+// (5 + 3) * 10 = 80

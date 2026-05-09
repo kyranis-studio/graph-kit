@@ -7,15 +7,21 @@ export function validateGraph(graph: Graph): string[] {
   try {
     topologicalSort(graph);
   } catch (e) {
-    if (e instanceof Error && e.message.includes('Cycle detected')) errors.push(e.message);
+    if (e instanceof Error && e.message.includes('Cycle detected')) {
+      errors.push(e.message);
+    }
   }
 
   for (const edge of graph.edges.values()) {
     if (!graph.nodes.has(edge.sourceNodeId)) {
-      errors.push(`Edge ${edge.id} references non-existent source node ${edge.sourceNodeId}`);
+      errors.push(
+        `Edge ${edge.id} references non-existent source node ${edge.sourceNodeId}`,
+      );
     }
     if (!graph.nodes.has(edge.targetNodeId)) {
-      errors.push(`Edge ${edge.id} references non-existent target node ${edge.targetNodeId}`);
+      errors.push(
+        `Edge ${edge.id} references non-existent target node ${edge.targetNodeId}`,
+      );
     }
   }
 

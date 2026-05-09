@@ -37,14 +37,22 @@ export interface ChatRequest {
 
 export interface ChatResponse {
   message: ChatMessage;
-  usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
 }
 
 export interface StreamChunk {
   delta: string;
   thinking?: string;
   done?: boolean;
-  usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
   fullContent?: string;
   fullThinking?: string;
   tool_calls?: ToolCall[];

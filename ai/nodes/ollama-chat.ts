@@ -19,7 +19,9 @@ export function getOllamaChatNodeType(): NodeTypeDefinition {
     ],
     execute: async (inputs: any, context: ExecutionContext) => {
       const messages = [];
-      if (inputs.systemPrompt) messages.push({ role: 'system', content: inputs.systemPrompt });
+      if (inputs.systemPrompt) {
+        messages.push({ role: 'system', content: inputs.systemPrompt });
+      }
       messages.push({ role: 'user', content: inputs.prompt });
 
       let fullResponse = '';
@@ -32,10 +34,9 @@ export function getOllamaChatNodeType(): NodeTypeDefinition {
           messages: messages as any,
           temperature: inputs.temperature,
         })) {
-          // Chunks contain cumulative content
           fullResponse = chunk.fullContent || fullResponse;
           fullThinking = chunk.fullThinking || fullThinking;
-          
+
           context.graph.emit('llmStreamChunk', {
             nodeId: context.nodeId,
             state: {
@@ -44,7 +45,7 @@ export function getOllamaChatNodeType(): NodeTypeDefinition {
               done: chunk.done ?? false,
             },
           });
-          
+
           if (chunk.done) {
             usage = chunk.usage;
           }
@@ -59,8 +60,8 @@ export function getOllamaChatNodeType(): NodeTypeDefinition {
         usage = response.usage;
       }
 
-      return { 
-        response: fullResponse, 
+      return {
+        response: fullResponse,
         thinking: fullThinking || undefined,
         usage,
       };
