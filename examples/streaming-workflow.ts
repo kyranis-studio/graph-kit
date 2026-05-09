@@ -5,7 +5,7 @@ registerOllamaNodes(graph);
 
 const aiNode = graph.addNode("ollama-chat", {
   data: {
-    model: "qwen3.5:9b",
+    model: "lfm2.5-thinking:latest",
     prompt: "Write a short poem about software engineering.",
     streaming: true,
     temperature: 0.7,

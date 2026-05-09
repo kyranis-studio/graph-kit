@@ -4,8 +4,8 @@ import type {
   Graph,
   Node,
   LogLevel,
-} from '../types/index.ts';
-import { ExecutionLogger } from './log-engine.ts';
+} from "../types/index.ts";
+import { ExecutionLogger } from "./log-engine.ts";
 
 export class WorkflowImpl implements Workflow {
   private graph: Graph;
@@ -34,13 +34,13 @@ export class WorkflowImpl implements Workflow {
     this.endNode = config.endNode;
     this.onStateUpdate = config.onStateUpdate;
 
-    let level: LogLevel = 'minimal';
+    let level: LogLevel = "minimal";
     if (config.logLevel) {
       level = config.logLevel;
     } else if (config.verbose === true) {
-      level = 'verbose';
+      level = "verbose";
     } else if (config.verbose === false) {
-      level = 'silent';
+      level = "silent";
     }
     this.logger = new ExecutionLogger({ logLevel: level });
   }
@@ -58,8 +58,8 @@ export class WorkflowImpl implements Workflow {
 
   connect(source: string, target: string): Workflow {
     const parse = (s: string) => {
-      if (s === 'START' || s === 'END') return { nodeId: s, portId: 'trigger' };
-      const [nodeId, portId] = s.split('.');
+      if (s === "START" || s === "END") return { nodeId: s, portId: "trigger" };
+      const [nodeId, portId] = s.split(".");
       if (!portId) throw new Error(`Invalid format: ${s} (expected node.port)`);
       return { nodeId, portId };
     };
@@ -93,7 +93,7 @@ export class WorkflowImpl implements Workflow {
     const visited = new Set<string>();
     this.stepCount = 0;
 
-    this.logger.printHeader('WORKFLOW', 0, {
+    this.logger.printHeader("WORKFLOW", 0, {
       Start: this.startNode,
       End: this.endNode,
     });
@@ -115,6 +115,7 @@ export class WorkflowImpl implements Workflow {
         node.type,
         this.stepCount,
         this.stepCount,
+        node.metadata?.label,
       );
 
       const inputs: Record<string, unknown> = {};
@@ -145,6 +146,7 @@ export class WorkflowImpl implements Workflow {
       }
 
       this.logger.printStreamSummary(currentNodeId);
+      this.logger.printNodeOutputs(output);
       this.logger.printNodeDone(duration);
 
       this.onStateUpdate?.(state);
@@ -154,7 +156,7 @@ export class WorkflowImpl implements Workflow {
       );
       if (conditional) {
         const nextNodeId = conditional.condition(state);
-        this.logger.info(`→ condition → ${nextNodeId}`);
+        this.logger.printDebug("condition", nextNodeId);
         currentNodeId = nextNodeId;
       } else {
         const outgoing = this.graph
@@ -164,13 +166,13 @@ export class WorkflowImpl implements Workflow {
           throw new Error(`No outgoing edges from ${currentNodeId}`);
         }
         const nextNodeId = outgoing[0].targetNodeId;
-        this.logger.info(`→ ${nextNodeId}`);
+        this.logger.printDebug("next", nextNodeId);
         currentNodeId = nextNodeId;
       }
     }
 
     offStream();
-    this.logger.printFooter('success', [`${this.stepCount} steps`]);
+    this.logger.printFooter("success", [`${this.stepCount} steps`]);
     return state;
   }
 
@@ -180,9 +182,11 @@ export class WorkflowImpl implements Workflow {
         nodeId: string;
         state: { response: string; thinking?: string; done: boolean };
       };
-      this.logger.handleStreamChunk(chunk);
+      const node = this.graph.getNode(chunk.nodeId);
+      const streaming = node?.data?.streaming === true;
+      this.logger.handleStreamChunk({ ...chunk, streaming });
     };
-    this.graph.on('llmStreamChunk', handler);
-    return () => this.graph.off('llmStreamChunk', handler);
+    this.graph.on("llmStreamChunk", handler);
+    return () => this.graph.off("llmStreamChunk", handler);
   }
 }

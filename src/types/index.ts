@@ -166,4 +166,4 @@ export interface GraphConfig {
   name?: string;
 }
 
-export type LogLevel = 'silent' | 'minimal' | 'verbose';
+export type LogLevel = 'silent' | 'muted' | 'minimal' | 'verbose';

@@ -1,6 +1,11 @@
-import type { Graph, GraphState, ExecutionContext, LogLevel } from '../types/index.ts';
-import { topologicalSort } from '../algorithms/sorting.ts';
-import { ExecutionLogger } from './log-engine.ts';
+import type {
+  Graph,
+  GraphState,
+  ExecutionContext,
+  LogLevel,
+} from "../types/index.ts";
+import { topologicalSort } from "../algorithms/sorting.ts";
+import { ExecutionLogger } from "./log-engine.ts";
 
 export type { LogLevel };
 
@@ -8,13 +13,13 @@ export class ExecutionEngine {
   private logger: ExecutionLogger;
 
   constructor(config?: { verbose?: boolean; logLevel?: LogLevel }) {
-    let level: LogLevel = 'minimal';
+    let level: LogLevel = "minimal";
     if (config?.logLevel) {
       level = config.logLevel;
     } else if (config?.verbose === true) {
-      level = 'verbose';
+      level = "verbose";
     } else if (config?.verbose === false) {
-      level = 'silent';
+      level = "silent";
     }
     this.logger = new ExecutionLogger({ logLevel: level });
   }
@@ -26,10 +31,11 @@ export class ExecutionEngine {
     };
     const sortedNodes = topologicalSort(graph);
 
-    this.logger.printHeader('EXECUTION', sortedNodes.length, {
-      Order: sortedNodes.length > 0
-        ? `${sortedNodes[0]} → ${sortedNodes[sortedNodes.length - 1]}`
-        : 'none',
+    this.logger.printHeader("EXECUTION", sortedNodes.length, {
+      Order:
+        sortedNodes.length > 0
+          ? `${sortedNodes[0]} → ${sortedNodes[sortedNodes.length - 1]}`
+          : "none",
     });
 
     const offStream = this.attachStreamHandler(graph);
@@ -41,11 +47,17 @@ export class ExecutionEngine {
 
       Object.assign(inputs, node.data);
 
-      this.logger.printNodeStart(nodeId, node.type, i + 1, sortedNodes.length);
+      this.logger.printNodeStart(
+        nodeId,
+        node.type,
+        i + 1,
+        sortedNodes.length,
+        node.metadata?.label,
+      );
       this.logger.printNodeInputs(inputs);
 
       const startTime = performance.now();
-      graph.emit('nodeStart', { nodeId, inputs });
+      graph.emit("nodeStart", { nodeId, inputs });
 
       try {
         const context: ExecutionContext = {
@@ -64,22 +76,32 @@ export class ExecutionEngine {
         );
 
         const duration = performance.now() - startTime;
+
+        // Collect outputs for logging
+        const outputs: Record<string, unknown> = {};
+        for (const [key, value] of state.values.entries()) {
+          if (key.startsWith(`${nodeId}.`)) {
+            outputs[key.split(".")[1]] = value;
+          }
+        }
+
         this.logger.printStreamSummary(nodeId);
+        this.logger.printNodeOutputs(outputs);
         this.logger.printNodeDone(duration);
-        graph.emit('nodeComplete', { nodeId, output: inputs, inputs });
+        graph.emit("nodeComplete", { nodeId, output: outputs, inputs });
       } catch (error) {
         this.logger.printNodeError(error);
-        graph.emit('nodeError', { nodeId, error });
+        graph.emit("nodeError", { nodeId, error });
         offStream();
         throw error;
       }
     }
 
     offStream();
-    this.logger.printFooter('success', [
+    this.logger.printFooter("success", [
       `${sortedNodes.length} nodes executed`,
     ]);
-    graph.emit('graphComplete', { state });
+    graph.emit("graphComplete", { state });
     return state;
   }
 
@@ -105,10 +127,12 @@ export class ExecutionEngine {
         nodeId: string;
         state: { response: string; thinking?: string; done: boolean };
       };
-      this.logger.handleStreamChunk(chunk);
+      const node = graph.getNode(chunk.nodeId);
+      const streaming = node?.data?.streaming === true;
+      this.logger.handleStreamChunk({ ...chunk, streaming });
     };
-    graph.on('llmStreamChunk', handler);
-    return () => graph.off('llmStreamChunk', handler);
+    graph.on("llmStreamChunk", handler);
+    return () => graph.off("llmStreamChunk", handler);
   }
 
   private async runWithMiddlewares(
@@ -127,10 +151,10 @@ export class ExecutionEngine {
         const mw = middlewares[middlewareIndex++];
         await mw(context, run);
       } else {
-        const output = (await node.execute(
-          inputs,
-          context,
-        )) as Record<string, unknown>;
+        const output = (await node.execute(inputs, context)) as Record<
+          string,
+          unknown
+        >;
         for (const [portId, value] of Object.entries(output)) {
           state.values.set(`${context.nodeId}.${portId}`, value);
         }
