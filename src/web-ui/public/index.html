@@ -38,16 +38,11 @@
       </div>
       <div id="graphContainer" class="graph-container">
         <div id="graphViewport" class="graph-viewport">
-        <svg id="graphSvg" width="100%" height="100%">
-          <defs>
-            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
-              <polygon points="0 0, 10 3.5, 0 7" fill="#888" />
-            </marker>
-            <marker id="arrowhead-active" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
-              <polygon points="0 0, 10 3.5, 0 7" fill="#6282ff" />
-            </marker>
-          </defs>
-        </svg>
+        <canvas id="graphCanvas" class="graph-canvas"></canvas>
+        </div>
+        <div id="minimap" class="minimap">
+          <div class="minimap-header">Overview</div>
+          <svg id="minimapSvg"></svg>
         </div>
       </div>
     </div>
@@ -71,6 +66,7 @@
 
 <div id="toast" class="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

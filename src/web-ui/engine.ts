@@ -144,6 +144,11 @@ export class WebUIExecutionEngine {
           return Response.json({ status: "cancelled" });
         }
 
+        if (req.method === "POST" && path === "/api/toggle-debug") {
+          this.debugMode = !this.debugMode;
+          return Response.json({ debugMode: this.debugMode });
+        }
+
         if (path === "/api/events") {
           const { readable, writable } = new TransformStream<
             Uint8Array,
