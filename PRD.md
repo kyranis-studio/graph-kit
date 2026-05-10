@@ -2,7 +2,7 @@
 
 ## Product Requirements Document (PRD)
 
-**Version:** 1.8  
+**Version:** 1.9  
 **Date:** May 10, 2026  
 **Status:** Updated
 
@@ -31,9 +31,10 @@
    - [4.2 Graph Execution Modes](#42-graph-execution-modes)
      - [4.2.1 Sequential Execution (Default)](#421-sequential-execution-default)
      - [4.2.2 Debug Execution Engine](#422-debug-execution-engine)
-     - [4.2.3 Workflow Execution (State-based)](#423-workflow-execution-state-based)
-   - [4.2.4 Graph State](#424-graph-state)
-   - [4.3 Log Engine](#43-log-engine)
+      - [4.2.3 Workflow Execution (State-based)](#423-workflow-execution-state-based)
+      - [4.2.4 Web UI Execution Mode](#424-web-ui-execution-mode)
+    - [4.2.5 Graph State](#425-graph-state)
+    - [4.3 Log Engine](#43-log-engine)
      - [4.3.1 Log Level Configuration](#431-log-level-configuration)
      - [4.3.2 Background Color Hierarchy](#432-background-color-hierarchy)
      - [4.3.3 Minimal Mode](#433-minimal-mode)
@@ -44,9 +45,17 @@
 5. [Debug Execution Engine](#5-debug-execution-engine)
    - [5.1 Force Full Log Mode](#51-force-full-log-mode)
    - [5.2 Forced Streaming Display for Chat Nodes](#52-forced-streaming-display-for-chat-nodes)
-   - [5.3 Step-by-Step Execution](#53-step-by-step-execution)
-   - [5.4 Engine Architecture](#54-engine-architecture)
-   - [5.5 Keyboard Controls](#55-keyboard-controls)
+    - [5.3 Step-by-Step Execution](#53-step-by-step-execution)
+    - [5.4 Public API](#54-public-api)
+    - [5.5 Web UI Server Mode](#55-web-ui-server-mode)
+      - [5.5.1 Overview](#551-overview)
+      - [5.5.2 Architecture](#552-architecture)
+      - [5.5.3 REST API Endpoints](#553-rest-api-endpoints)
+      - [5.5.4 SSE Event Stream](#554-sse-event-stream)
+      - [5.5.5 Configuration](#555-configuration)
+      - [5.5.6 Usage](#556-usage)
+      - [5.5.7 Frontend UI Features](#557-frontend-ui-features)
+      - [5.5.8 Comparison with CLI Debug Engine](#558-comparison-with-cli-debug-engine)
 6. [State Management](#6-state-management)
    - [6.1 State Flow](#61-state-flow)
    - [6.2 Persistence](#62-persistence)
@@ -157,7 +166,13 @@ graph-kit/
 │   ├── execution/          # Engine, Debug Engine, Workflow
 │   ├── algorithms/         # Traversal, Sorting, Validation
 │   ├── types/              # TypeScript types
-│   └── utils/              # Export (Mermaid/DOT), dotenv loader
+│   ├── utils/              # Export (Mermaid/DOT), dotenv loader
+│   └── web-ui/             # Web UI server mode
+│       ├── engine.ts       # WebUIExecutionEngine (HTTP server + SSE)
+│       └── public/         # Frontend assets
+│           ├── index.html  # Main page (split-panel layout)
+│           ├── app.js      # Client-side graph visualization + debug panel
+│           └── styles.css  # Dark theme styling
 ├── tests/                  # Unit tests
 └── examples/               # Usage examples
 ```
@@ -406,7 +421,42 @@ class Workflow {
 }
 ```
 
-#### 4.2.4 Graph State
+#### 4.2.4 Web UI Execution Mode
+
+The `WebUIExecutionEngine` provides a browser-based execution mode that serves a web page for visual graph execution and debugging.
+
+- **Auto Mode**: Displays the graph as an interactive SVG visualization. Press "Execute" to run all nodes in topological order with real-time node status updates.
+- **Debug Mode**: Splits the page into two panels — left panel shows the graph visualization with execution controls, right panel shows debug information (execution log, node inputs/outputs, streaming content, and timing).
+- **Real-time updates**: Server-Sent Events (SSE) stream node lifecycle events to the browser
+- **Step-by-step execution**: In debug mode, execution pauses before each node; press "Step" to continue
+- **Node inspection**: Click on any node to view its ports, input/output values, streaming content, and errors
+
+```typescript
+import { WebUIExecutionEngine } from '@kyranis-studio/graph-kit';
+
+const engine = new WebUIExecutionEngine({
+  port: 3000,
+  debugMode: true, // Split-panel UI with step control
+});
+
+const state = await engine.execute(graph);
+```
+
+**Constructor Signature:**
+```typescript
+interface WebUIConfig {
+  port?: number;      // HTTP server port (default: 3000)
+  debugMode?: boolean; // Enable split-panel debug UI (default: false)
+}
+
+class WebUIExecutionEngine {
+  constructor(config?: WebUIConfig);
+  execute(graph: Graph, initialState?: GraphState): Promise<GraphState>;
+  close(): void;
+}
+```
+
+### 4.2.5 Graph State
 
 ```typescript
 interface GraphState {
@@ -832,6 +882,195 @@ const cancelled: boolean = engine.isCancelled;
 The `GraphState` returned by `execute()` contains a `values` Map
 (`Map<string, unknown>`) keyed by `${nodeId}.${portId}` and an optional
 `messages` array for AI conversation history.
+
+### 5.5 Web UI Server Mode
+
+The `WebUIExecutionEngine` provides a browser-based alternative to the CLI debug
+engine. It starts an HTTP server that serves a web page with an interactive SVG
+graph visualization, real-time execution updates via Server-Sent Events (SSE),
+and a split-panel debug interface in debug mode.
+
+#### 5.5.1 Overview
+
+The Web UI mode runs the same graph execution engine under the hood but replaces
+the terminal output with a browser-based experience:
+
+- **Auto Mode**: Displays the graph as nodes with edges. Click "Execute" to run
+  all nodes in topological order. Nodes change color in real-time (gray →
+  blue → green/red) as they execute.
+- **Debug Mode**: The page splits horizontally — left panel shows the graph
+  visualization with step controls, right panel shows a structured debug log
+  with inputs, outputs, streaming content, and timing.
+
+#### 5.5.2 Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                   Browser (Client)                   │
+│  ┌──────────────────────┬──────────────────────────┐ │
+│  │   Graph Panel        │   Debug Panel (debug     │ │
+│  │   - SVG nodes/edges  │   mode only)             │ │
+│  │   - Color status     │   - Execution log        │ │
+│  │   - Execute/Step/    │   - Node details         │ │
+│  │     Cancel buttons   │   - Streaming content    │ │
+│  └──────────┬───────────┴────────┬─────────────────┘ │
+│             │                    │                    │
+│        ┌────┴────┐         ┌────┴────┐               │
+│        │  REST   │         │   SSE   │               │
+│        │  API    │         │  Events │               │
+│        └────┬────┘         └────┬────┘               │
+└─────────────┼───────────────────┼────────────────────┘
+              │                   │
+         ┌────┴───────────────────┴────┐
+         │      Deno HTTP Server        │
+         │    WebUIExecutionEngine       │
+         │                              │
+         │  ┌────────────────────────┐  │
+         │  │   Graph Execution      │  │
+         │  │   (topological sort,   │  │
+         │  │    middleware chain,   │  │
+         │  │    streaming, events)  │  │
+         │  └────────────────────────┘  │
+         └──────────────────────────────┘
+```
+
+#### 5.5.3 REST API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/graph` | Returns the graph definition (nodes, edges, metadata) |
+| `POST` | `/api/execute` | Starts graph execution |
+| `POST` | `/api/step` | Advances execution by one node (debug mode) |
+| `POST` | `/api/cancel` | Cancels running execution |
+| `GET` | `/api/events` | SSE stream for real-time execution events |
+
+#### 5.5.4 SSE Event Stream
+
+The server pushes Server-Sent Events to the browser for every execution
+lifecycle event:
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `executionStart` | `{ totalNodes, nodeOrder }` | Execution has begun |
+| `nodeStart` | `{ nodeId, nodeType, label, inputs, index, total, predecessors, successors }` | A node is about to execute |
+| `nodeComplete` | `{ nodeId, duration, outputs }` | A node finished successfully |
+| `nodeError` | `{ nodeId, error }` | A node failed |
+| `nodeSkipped` | `{ nodeId }` | Node was skipped (cancellation) |
+| `executionPaused` | `{ nodeId }` | Execution paused before node (debug mode) |
+| `executionResumed` | `{ nodeId }` | Execution resumed after step |
+| `streamChunk` | `{ nodeId, state: { response, thinking, done } }` | LLM streaming content |
+| `graphComplete` | `{ success, summary, totalNodes }` | Execution finished |
+| `executionError` | `{ error }` | Fatal execution error |
+
+#### 5.5.5 Configuration
+
+```typescript
+interface WebUIConfig {
+  port?: number;       // HTTP server port (default: 3000)
+  debugMode?: boolean; // Enable split-panel debug UI (default: false)
+}
+
+class WebUIExecutionEngine {
+  constructor(config?: WebUIConfig);
+
+  // Starts the server, serves the web UI, and executes the graph
+  // when triggered via the API. Returns the final GraphState.
+  execute(graph: Graph, initialState?: GraphState): Promise<GraphState>;
+
+  // Shut down the HTTP server
+  close(): void;
+}
+```
+
+#### 5.5.6 Usage
+
+**Basic usage (auto mode):**
+```typescript
+import { GraphKit, WebUIExecutionEngine } from '@kyranis-studio/graph-kit';
+
+const graph = GraphKit.createGraph({ name: 'My Workflow' });
+// ... add nodes and edges ...
+
+const engine = new WebUIExecutionEngine({ port: 3000 });
+await engine.execute(graph);
+// Open http://localhost:3000 in your browser
+```
+
+**Debug mode with split-panel UI:**
+```typescript
+const engine = new WebUIExecutionEngine({
+  port: 3000,
+  debugMode: true,  // Horizontal split: graph left, debug right
+});
+
+const state = await engine.execute(graph);
+// The UI pauses before each node — press "Step" to continue
+```
+
+**With AI streaming nodes:**
+```typescript
+import { registerOllamaNodes, WebUIExecutionEngine } from '@kyranis-studio/graph-kit';
+
+const graph = GraphKit.createGraph({ name: 'AI Chat' });
+registerOllamaNodes(graph);
+
+graph.addNode('ollama-chat', {
+  data: {
+    model: 'llama3',
+    prompt: 'Explain the water cycle briefly',
+    streaming: true,
+  },
+});
+
+const engine = new WebUIExecutionEngine({ port: 3000, debugMode: true });
+const state = await engine.execute(graph);
+
+// Access results from the state or view them in the browser
+```
+
+**Cleanup:**
+```typescript
+const engine = new WebUIExecutionEngine({ port: 3000 });
+const state = await engine.execute(graph);
+// When done with the server:
+engine.close();
+```
+
+#### 5.5.7 Frontend UI Features
+
+The web frontend (`index.html`, `app.js`, `styles.css`) provides:
+
+- **SVG Graph Rendering**: Auto-layout algorithm positions nodes in a layered
+  left-to-right flow. Nodes are rendered as rounded rectangles with labels.
+- **Status Colors**: Nodes change color based on execution state:
+  - Gray (`pending`): Not yet executed
+  - Blue (`running`): Currently executing
+  - Green (`completed`): Finished successfully
+  - Red (`error`): Execution failed
+- **Debug Panel** (right side, visible in debug mode):
+  - Execution log with timestamps
+  - Color-coded entries (blue=start, green=complete, red=error, yellow=paused)
+  - Streaming thinking/response content
+- **Node Details Panel**: Click any node to inspect its ports, input values,
+  output values, streaming content, and errors
+- **Toolbar Controls**:
+  - "Execute" button to start graph execution
+  - "Step" button (debug mode) to advance one node
+  - "Cancel" button to abort execution
+  - Status indicator showing current execution state
+
+#### 5.5.8 Comparison with CLI Debug Engine
+
+| Feature | CLI Debug Engine | Web UI Engine |
+|---------|:-:|:-:|
+| Graph visualization | Text-based node list | Interactive SVG graph |
+| Execution control | Keyboard (SPACE/ESC) | Button clicks |
+| Input/output display | Terminal log | Panel with expandable sections |
+| Streaming display | ANSI-colored terminal | Color-coded log entries |
+| Node inspection | Terminal output on hover | Click-to-inspect details panel |
+| Remote access | Local terminal only | Browser (network accessible) |
+| Port configuration | N/A | Configurable (default 3000) |
+| Split-panel debug | N/A | Horizontal split (graph + debug) |
 
 ---
 

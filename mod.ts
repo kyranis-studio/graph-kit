@@ -76,5 +76,7 @@ export {
 export { DebugExecutionEngine } from './src/execution/debug-engine.ts';
 export type { NodeDebugInfo, DebugStreamState } from './src/execution/debug-engine.ts';
 export { ExecutionEngine } from './src/execution/engine.ts';
+export { WebUIExecutionEngine } from './src/web-ui/engine.ts';
+export type { WebUIConfig } from './src/web-ui/engine.ts';
 export { ExecutionLogger, ConsoleLogger, DefaultFormatter } from './src/execution/log-engine.ts';
 export type { LogEngineConfig, LogEntry } from './src/execution/log-engine.ts';

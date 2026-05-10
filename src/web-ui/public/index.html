@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GraphKit Web UI</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div id="app">
+  <header id="toolbar">
+    <div class="toolbar-left">
+      <span class="logo">GraphKit</span>
+      <span id="graphName" class="graph-name"></span>
+      <span id="modeBadge" class="mode-badge"></span>
+    </div>
+    <div class="toolbar-center">
+      <span id="statusText" class="status-text">Ready</span>
+    </div>
+    <div class="toolbar-right">
+      <button id="btnExecute" class="btn btn-primary">Execute</button>
+      <button id="btnStep" class="btn btn-secondary" style="display:none">Step</button>
+      <button id="btnCancel" class="btn btn-danger" style="display:none">Cancel</button>
+    </div>
+  </header>
+
+  <div id="mainContainer" class="main-container">
+    <div id="leftPanel" class="panel panel-left">
+      <div class="panel-header">
+        <span>Graph</span>
+        <span id="nodeCounter" class="counter">0 nodes</span>
+      </div>
+      <div id="graphContainer" class="graph-container">
+        <svg id="graphSvg" width="100%" height="100%">
+          <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#888" />
+            </marker>
+            <marker id="arrowhead-active" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#6282ff" />
+            </marker>
+          </defs>
+        </svg>
+      </div>
+    </div>
+    <div id="rightPanel" class="panel panel-right">
+      <div class="panel-header">
+        <span>Debug Info</span>
+        <button id="btnClearLog" class="btn btn-small">Clear</button>
+      </div>
+      <div id="debugLog" class="debug-log"></div>
+      <div id="nodeDetails" class="node-details" style="display:none">
+        <div class="details-header">
+          <span id="detailTitle">Node Details</span>
+          <button id="btnCloseDetails" class="btn btn-small">&times;</button>
+        </div>
+        <div id="detailContent" class="detail-content"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>
