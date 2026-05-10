@@ -3,6 +3,7 @@ import { getOllamaChatNodeType } from './nodes/ollama-chat.ts';
 import { getOpenAIChatNodeType } from './nodes/openai-chat.ts';
 import { getOpenRouterChatNodeType } from './nodes/openrouter-chat.ts';
 import { getAIEmbeddingNodeType } from './nodes/ai-embedding.ts';
+import { getInteractiveChatNodeType } from './nodes/interactive-chat.ts';
 
 export function registerOllamaNodes(graph: Graph): void {
   graph.registerNodeType('ollama-chat', getOllamaChatNodeType());
@@ -18,4 +19,8 @@ export function registerOpenRouterNodes(graph: Graph): void {
 
 export function registerEmbeddingNodes(graph: Graph): void {
   graph.registerNodeType('ai-embedding', getAIEmbeddingNodeType());
+}
+
+export function registerInteractiveChatNode(graph: Graph): void {
+  graph.registerNodeType('interactive-chat', getInteractiveChatNodeType());
 }

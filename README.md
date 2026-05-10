@@ -36,6 +36,7 @@ provides the robust execution and debugging engines you need.
   - [Basic AI Generation](#basic-ai-generation)
   - [Streaming & Thinking](#streaming--thinking)
   - [Function Calling](#function-calling)
+  - [Interactive Terminal Chat](#interactive-terminal-chat)
   - [OpenRouter Providers](#openrouter-providers)
 - [🔄 Workflows & Routing](#-workflows--routing)
 - [📊 Visualization & Export](#-visualization--export)
@@ -51,8 +52,8 @@ provides the robust execution and debugging engines you need.
 - **Advanced Execution Engines**: Sequential execution, interactive step-through
   debugging, and state-based workflows.
 - **Rich AI Integrations**: Built-in support for **Ollama**, **OpenAI**, and
-  **OpenRouter** with native support for real-time streaming and reasoning
-  (thinking) chunks.
+  **OpenRouter** with native support for real-time streaming, reasoning
+  (thinking) chunks, and interactive terminal chat.
 - **Function Calling**: Easy-to-use tool calling loops for agentic behaviors.
 - **Extensible Logging**: Lifecycle hooks, multiple log levels, and debugging
   facilities.
@@ -347,6 +348,143 @@ if (response.message.tool_calls) {
 }
 ```
 
+### Interactive Terminal Chat
+
+The `interactive-chat` node provides a terminal-based REPL for multi-turn
+conversations with an LLM directly in your graph. It maintains conversation
+history, supports real-time streaming, and works with both the standard
+execution engine and the `DebugExecutionEngine`.
+
+```typescript
+import {
+  GraphKit,
+  registerInteractiveChatNode,
+  DebugExecutionEngine,
+} from "jsr:@kyranis-studio/graph-kit";
+
+const graph = GraphKit.createGraph({ name: "Terminal Chat" });
+registerInteractiveChatNode(graph);
+
+graph.addNode("interactive-chat", {
+  metadata: { label: "Chat Session" },
+  data: {
+    model: "llama3.2",
+    temperature: 0.7,
+    streaming: true,
+    systemPrompt: "You are a helpful assistant.",
+    initialPrompt: "Introduce yourself briefly.",
+  },
+});
+
+const debugEngine = new DebugExecutionEngine({ stepMode: false });
+const result = await debugEngine.execute(graph);
+
+const conversation = result.values.get(`${chatNode.id}.conversation`);
+console.log(`Tokens used: ${result.values.get(`${chatNode.id}.tokenCount`)}`);
+```
+
+**Node Interface:**
+
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| `model` | `string` | `"llama3"` | Ollama model name |
+| `systemPrompt` | `string` | — | System prompt for the conversation |
+| `temperature` | `number` | `0.7` | LLM temperature |
+| `streaming` | `boolean` | `true` | Enable real-time streaming output |
+| `initialPrompt` | `string` | — | First message to auto-send |
+| `baseUrl` | `string` | — | Custom Ollama base URL |
+| `tools` | `InteractiveTool[]` | — | Array of tool definitions and handlers for tool-calling |
+
+| Output | Type | Description |
+|--------|------|-------------|
+| `response` | `string` | Last AI response in the conversation |
+| `conversation` | `array` | Full conversation history (user + assistant) |
+| `tokenCount` | `number` | Total tokens used |
+
+During execution, the node displays an interactive prompt (`▸ You:`) and streams
+the AI response in real-time. Type `exit`, `quit`, or `q` to end the session.
+
+When `tools` are provided, streaming is automatically disabled and the node runs
+a tool-calling loop: the model may request tool invocations, results are fed
+back, and the loop continues until a text response is returned (max 10
+iterations per user turn).
+
+#### Code Assistant Example
+
+The [`examples/code-assistant.ts`](examples/code-assistant.ts) file demonstrates
+building a code development assistant using the `interactive-chat` node with
+tool-calling. It registers five tools — `read_file`, `write_file`, `list_files`,
+`grep_search`, and `run_command` — and passes them via the `tools` input.
+
+> **WARNING**: This is an educational example — not a production-ready assistant.
+> The tools can read, write, and execute arbitrary files and commands. Use with
+> extreme care and only in environments where you fully trust both the LLM model
+> and the code it may write or run. Run at your own risk.
+
+```typescript
+import { GraphKit, registerInteractiveChatNode, DebugExecutionEngine } from "jsr:@kyranis-studio/graph-kit";
+import type { ToolDefinition } from "jsr:@kyranis-studio/graph-kit/ai";
+
+interface InteractiveTool {
+  definition: ToolDefinition;
+  execute: (args: Record<string, unknown>) => Promise<string> | string;
+}
+
+const tools: InteractiveTool[] = [
+  {
+    definition: {
+      type: "function",
+      function: {
+        name: "read_file",
+        description: "Read the contents of a file",
+        parameters: {
+          type: "object",
+          properties: {
+            path: { type: "string", description: "Absolute path to the file" },
+          },
+          required: ["path"],
+        },
+      },
+    },
+    execute: async (args) => {
+      try {
+        return await Deno.readTextFile(args.path as string);
+      } catch (e) {
+        return `[error] ${(e as Error).message}`;
+      }
+    },
+  },
+  // ... (write_file, list_files, grep_search, run_command follow the same pattern)
+];
+
+const graph = GraphKit.createGraph({ name: "Code Assistant" });
+registerInteractiveChatNode(graph);
+
+const chatNode = graph.addNode("interactive-chat", {
+  metadata: { label: "Code Assistant" },
+  data: {
+    model: "llama3.2",
+    temperature: 0.3,
+    streaming: false,
+    systemPrompt:
+      "You are a coding assistant that helps users develop software. " +
+      "You have access to tools for reading, writing, and searching files, " +
+      "and running shell commands. Use them to help the user with their code. " +
+      "Think step by step. Call one tool at a time and wait for the result before proceeding.",
+    initialPrompt: "Introduce yourself and list the tools you have available.",
+    tools,
+  },
+});
+
+const engine = new DebugExecutionEngine({ stepMode: false });
+const result = await engine.execute(graph);
+```
+
+Run with the necessary permissions:
+```
+deno run --allow-read --allow-write --allow-run --allow-net examples/code-assistant.ts
+```
+
 ### OpenRouter Providers
 
 To connect to cloud providers via OpenRouter, use `registerOpenRouterNodes`.
@@ -441,6 +579,13 @@ digraph G {
 - `GraphKit.createGraph(config?)` - Create a new graph instance.
 - `GraphKit.fromJSON(json, nodeTypes?)` - Restore a graph from a serialized JSON
   string.
+
+### Node Registration Functions
+
+- `registerInteractiveChatNode(graph)` - Registers the `interactive-chat` node
+  type for terminal-based multi-turn LLM conversations. Supports tool-calling
+  via a `tools` data field (array of `InteractiveTool` objects containing a
+  `ToolDefinition` and an `execute` handler).
 
 ### `Graph`
 

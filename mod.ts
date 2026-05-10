@@ -5,6 +5,7 @@ import {
   registerOpenAINodes,
   registerOpenRouterNodes,
   registerEmbeddingNodes,
+  registerInteractiveChatNode,
 } from './ai/mod.ts';
 
 interface GraphKitObject {
@@ -70,6 +71,7 @@ export {
   registerOpenAINodes,
   registerOpenRouterNodes,
   registerEmbeddingNodes,
+  registerInteractiveChatNode,
 };
 export { DebugExecutionEngine } from './src/execution/debug-engine.ts';
 export type { NodeDebugInfo, DebugStreamState } from './src/execution/debug-engine.ts';
