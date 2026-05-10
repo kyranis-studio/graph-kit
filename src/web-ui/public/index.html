@@ -18,6 +18,11 @@
       <span id="statusText" class="status-text">Ready</span>
     </div>
     <div class="toolbar-right">
+      <button id="btnZoomOut" class="btn btn-icon" title="Zoom Out">−</button>
+      <span id="zoomDisplay" class="zoom-display">100%</span>
+      <button id="btnZoomIn" class="btn btn-icon" title="Zoom In">+</button>
+      <button id="btnZoomReset" class="btn btn-small" title="Reset Zoom &amp; Pan">Reset</button>
+      <div class="toolbar-divider"></div>
       <button id="btnExecute" class="btn btn-primary">Execute</button>
       <button id="btnStep" class="btn btn-secondary" style="display:none">Step</button>
       <button id="btnCancel" class="btn btn-danger" style="display:none">Cancel</button>
@@ -28,9 +33,11 @@
     <div id="leftPanel" class="panel panel-left">
       <div class="panel-header">
         <span>Graph</span>
+        <span id="zoomLevel" class="zoom-level">100%</span>
         <span id="nodeCounter" class="counter">0 nodes</span>
       </div>
       <div id="graphContainer" class="graph-container">
+        <div id="graphViewport" class="graph-viewport">
         <svg id="graphSvg" width="100%" height="100%">
           <defs>
             <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
@@ -41,8 +48,10 @@
             </marker>
           </defs>
         </svg>
+        </div>
       </div>
     </div>
+    <div id="resizeHandle" class="resize-handle"></div>
     <div id="rightPanel" class="panel panel-right">
       <div class="panel-header">
         <span>Debug Info</span>

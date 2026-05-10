@@ -2,7 +2,7 @@
 
 ## Product Requirements Document (PRD)
 
-**Version:** 1.9  
+**Version:** 1.10  
 **Date:** May 10, 2026  
 **Status:** Updated
 
@@ -1042,6 +1042,20 @@ The web frontend (`index.html`, `app.js`, `styles.css`) provides:
 
 - **SVG Graph Rendering**: Auto-layout algorithm positions nodes in a layered
   left-to-right flow. Nodes are rendered as rounded rectangles with labels.
+- **Zoom and Pan**: The graph viewport supports interactive zoom and pan:
+  - **Mouse wheel**: Zoom in/out centered on cursor position
+  - **Click-drag on empty space**: Pan the graph view
+  - **Toolbar controls**: Zoom In (`+`), Zoom Out (`−`), and Reset buttons
+  - **Zoom indicator**: Current zoom percentage displayed both in the toolbar
+    and the graph panel header
+  - **Constraints**: Zoom is clamped between 25% and 300%
+- **Resizable Debug Sidebar**: The right debug panel can be resized by dragging
+  the divider handle between the graph and debug panels:
+  - **Drag handle**: A vertical bar between left and right panels changes cursor
+    to `col-resize` on hover
+  - **Width constraints**: Minimum 200px, maximum 60% of container width
+  - **Visual feedback**: Handle highlights with accent color during hover and drag
+  - **Body class**: `resizing` class prevents text selection during drag
 - **Status Colors**: Nodes change color based on execution state:
   - Gray (`pending`): Not yet executed
   - Blue (`running`): Currently executing
@@ -1071,6 +1085,8 @@ The web frontend (`index.html`, `app.js`, `styles.css`) provides:
 | Remote access | Local terminal only | Browser (network accessible) |
 | Port configuration | N/A | Configurable (default 3000) |
 | Split-panel debug | N/A | Horizontal split (graph + debug) |
+| Zoom & Pan | N/A | Mouse wheel zoom, click-drag pan, toolbar controls |
+| Resizable sidebar | N/A | Draggable divider between graph and debug panels |
 
 ---
 

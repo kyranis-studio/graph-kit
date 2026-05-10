@@ -230,6 +230,55 @@ const debugEngine = new DebugExecutionEngine({
 const result = await debugEngine.execute(graph);
 ```
 
+### Web UI Execution Engine
+
+For a browser-based execution and debugging experience, use the
+`WebUIExecutionEngine`. It starts an HTTP server that serves an interactive
+SVG graph visualization with real-time updates via Server-Sent Events (SSE).
+
+**Auto Mode — basic execution with visual feedback:**
+
+```typescript
+import { WebUIExecutionEngine, GraphKit } from "jsr:@kyranis-studio/graph-kit";
+
+const graph = GraphKit.createGraph({ name: "My Workflow" });
+// ... add nodes and edges ...
+
+const engine = new WebUIExecutionEngine({ port: 3000 });
+await engine.execute(graph);
+// Open http://localhost:3000
+```
+
+**Debug Mode — split-panel UI with step-by-step control:**
+
+```typescript
+const engine = new WebUIExecutionEngine({
+  port: 3000,
+  debugMode: true, // Horizontal split: graph left, debug right
+});
+
+const state = await engine.execute(graph);
+// Execution pauses before each node — click "Step" to advance
+```
+
+**Frontend features:**
+
+- **Zoom & Pan**: Scroll to zoom, click-drag on empty space to pan, or use
+  the toolbar buttons (`+`, `−`, Reset). Zoom is clamped between 25% and
+  300%, and the current zoom level is displayed in both the toolbar and graph
+  panel header.
+- **Resizable Debug Sidebar**: Drag the divider handle between the graph and
+  debug panels to resize. The sidebar has a minimum width of 200px and a
+  maximum of 60% of the container. The handle highlights with the accent
+  color on hover and drag.
+- **SVG Graph Rendering**: Auto-layout algorithm positions nodes in a
+  layered left-to-right flow. Nodes are rendered as rounded rectangles with
+  labels and change color based on execution state.
+- **Real-time Updates**: SSE streams node lifecycle events (start, complete,
+  error, streaming chunks) to the browser.
+- **Node Inspection**: Click any node to view its ports, inputs, outputs,
+  streaming content, and errors.
+
 ### Custom Node Logging
 
 Custom nodes receive an `ExecutionContext` as the second argument to their
