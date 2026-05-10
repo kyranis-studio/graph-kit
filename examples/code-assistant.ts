@@ -188,7 +188,7 @@ registerInteractiveChatNode(graph);
 const chatNode = graph.addNode("interactive-chat", {
   metadata: { label: "Code Assistant" },
   data: {
-    model: "lfm2.5-thinking:latest",
+    model: "gemma4:e2b",
     temperature: 0.3,
     streaming: false,
     systemPrompt:

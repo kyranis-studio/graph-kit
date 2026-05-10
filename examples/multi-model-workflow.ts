@@ -47,7 +47,10 @@ const tools: InteractiveTool[] = [
         parameters: {
           type: "object",
           properties: {
-            command: { type: "string", description: "Shell command to execute" },
+            command: {
+              type: "string",
+              description: "Shell command to execute",
+            },
           },
           required: ["command"],
         },
@@ -97,6 +100,7 @@ graph.registerNodeType("compose-context", {
     { id: "userPrompt", name: "User Prompt", type: "string" },
     { id: "orchestratorOutput", name: "Orchestrator Output", type: "string" },
     { id: "thinkerOutput", name: "Thinker Output", type: "string" },
+    { id: "sharedMemory", name: "Shared Memory", type: "string" },
   ],
   outputs: [{ id: "text", name: "Text", type: "string" }],
   execute: async (inputs: any) => {
@@ -109,6 +113,9 @@ graph.registerNodeType("compose-context", {
     }
     if (inputs.thinkerOutput) {
       parts.push(`## Thinker's Analysis\n\n${inputs.thinkerOutput}`);
+    }
+    if (inputs.sharedMemory) {
+      parts.push(`## Past Interactions\n\n${inputs.sharedMemory}`);
     }
     return { text: parts.join("\n\n---\n\n") };
   },
@@ -154,6 +161,30 @@ graph.registerNodeType("display", {
   },
 });
 
+graph.registerNodeType("shared-memory", {
+  inputs: [
+    { id: "orchestrator", name: "Orchestrator", type: "string" },
+    { id: "thinker", name: "Thinker", type: "string" },
+    { id: "toolCaller", name: "Tool Caller", type: "string" },
+  ],
+  outputs: [{ id: "text", name: "Shared Memory", type: "string" }],
+  execute: async (inputs: any, context: any) => {
+    const memKey = "__shared_memory";
+    const entries: string[] = context.state.values.get(memKey) || [];
+    const additions: string[] = [];
+    if (inputs.orchestrator)
+      additions.push(`## Orchestrator\n\n${inputs.orchestrator}`);
+    if (inputs.thinker) additions.push(`## Thinker\n\n${inputs.thinker}`);
+    if (inputs.toolCaller)
+      additions.push(`## Tool Caller\n\n${inputs.toolCaller}`);
+    if (additions.length > 0) {
+      entries.push(additions.join("\n\n---\n\n"));
+    }
+    context.state.values.set(memKey, entries);
+    return { text: entries.join("\n\n---\n\n") };
+  },
+});
+
 const promptNode = graph.addNode("user-prompt", { id: "prompt" });
 
 const orchestrator = graph.addNode("interactive-chat", {
@@ -165,6 +196,7 @@ const orchestrator = graph.addNode("interactive-chat", {
     systemPrompt:
       "You are an orchestrator. Respond to the user's request with a clear plan. Be concise and structured.",
     temperature: 0.3,
+    streaming: true,
   },
 });
 
@@ -177,6 +209,7 @@ const thinker = graph.addNode("interactive-chat", {
     systemPrompt:
       "You are a deep reasoning engine. Think step by step, considering edge cases and optimizations.",
     temperature: 0.5,
+    streaming: true,
   },
 });
 
@@ -185,11 +218,11 @@ const toolCaller = graph.addNode("interactive-chat", {
   metadata: { label: "Tool Caller" },
   data: {
     provider: "ollama",
-    model: "functiongemma:latest",
+    model: "gemma4:e2b",
     systemPrompt:
       "You generate clean implementations. Use the write_file tool to create the actual files and run_command to execute them. Always write working code.",
     temperature: 0.3,
-    streaming: false,
+    streaming: true,
     tools,
   },
 });
@@ -201,6 +234,7 @@ const composeForToolCaller = graph.addNode("compose-context", {
   id: "compose-for-toolcaller",
 });
 const display = graph.addNode("display", { id: "display" });
+const sharedMemory = graph.addNode("shared-memory", { id: "shared-memory" });
 const end = graph.addNode("user-prompt", { id: "end" });
 
 // Edges serve dual purpose: data flow (input resolution) and workflow routing
@@ -267,8 +301,38 @@ graph.addEdge({
 graph.addEdge({
   sourceNodeId: "tool-caller",
   sourcePortId: "response",
+  targetNodeId: "shared-memory",
+  targetPortId: "toolCaller",
+});
+graph.addEdge({
+  sourceNodeId: "orchestrator",
+  sourcePortId: "response",
+  targetNodeId: "shared-memory",
+  targetPortId: "orchestrator",
+});
+graph.addEdge({
+  sourceNodeId: "thinker",
+  sourcePortId: "response",
+  targetNodeId: "shared-memory",
+  targetPortId: "thinker",
+});
+graph.addEdge({
+  sourceNodeId: "shared-memory",
+  sourcePortId: "text",
   targetNodeId: "display",
   targetPortId: "toolCaller",
+});
+graph.addEdge({
+  sourceNodeId: "shared-memory",
+  sourcePortId: "text",
+  targetNodeId: "compose-for-thinker",
+  targetPortId: "sharedMemory",
+});
+graph.addEdge({
+  sourceNodeId: "shared-memory",
+  sourcePortId: "text",
+  targetNodeId: "compose-for-toolcaller",
+  targetPortId: "sharedMemory",
 });
 
 console.log();
@@ -294,7 +358,7 @@ const workflow = graph.createWorkflow({
   startNode: "prompt",
   endNode: "end",
   maxSteps: 50,
-  verbose: false,
+  logLevel: "minimal",
 });
 
 workflow.addConditionalEdge({
