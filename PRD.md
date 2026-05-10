@@ -2,7 +2,7 @@
 
 ## Product Requirements Document (PRD)
 
-**Version:** 1.7  
+**Version:** 1.8  
 **Date:** May 10, 2026  
 **Status:** Updated
 
@@ -18,8 +18,8 @@
    - [1.1 Vision](#11-vision)
    - [1.2 Inspiration](#12-inspiration)
 2. [Architecture Overview](#2-architecture-overview)
-   - [2.1 Core Library (`graph-kit`)](#21-core-library-graph-kit)
-   - [2.2 AI Inference Library (`@graph-kit/ai`)](#22-ai-inference-library-graph-kitai)
+   - [2.1 Core Library](#21-core-library)
+   - [2.2 AI Inference Library](#22-ai-inference-library)
    - [2.3 Project Structure](#23-project-structure)
 3. [Core Concepts](#3-core-concepts)
    - [3.1 Node System](#31-node-system)
@@ -30,54 +30,55 @@
    - [4.1 Node Execution Model](#41-node-execution-model)
    - [4.2 Graph Execution Modes](#42-graph-execution-modes)
      - [4.2.1 Sequential Execution (Default)](#421-sequential-execution-default)
-     - [4.2.2 Debug Execution (Interactive)](#422-debug-execution-interactive)
+     - [4.2.2 Debug Execution Engine](#422-debug-execution-engine)
      - [4.2.3 Workflow Execution (State-based)](#423-workflow-execution-state-based)
-    - [4.2.4 Graph State](#424-graph-state)
-    - [4.3 Log Engine](#43-log-engine)
-      - [4.3.1 Log Level Configuration](#431-log-level-configuration)
-      - [4.3.2 Background Color Hierarchy](#432-background-color-hierarchy)
-      - [4.3.3 Minimal Mode](#433-minimal-mode)
-      - [4.3.4 Verbose Mode](#434-verbose-mode)
-      - [4.3.5 Log Output Hierarchy](#435-log-output-hierarchy)
-      - [4.3.6 Log Engine Architecture](#436-log-engine-architecture)
-      - [4.3.7 Extending the Log Engine](#437-extending-the-log-engine)
- 6. [Debugging Engine](#6-debugging-engine)
-   - [6.1 Force Full Log Mode](#61-force-full-log-mode)
-   - [6.2 Forced Streaming Display for Chat Nodes](#62-forced-streaming-display-for-chat-nodes)
-   - [6.3 Step-by-Step Execution](#63-step-by-step-execution)
-   - [6.4 Debugging Engine Architecture](#64-debugging-engine-architecture)
-   - [6.5 Keyboard Controls](#65-keyboard-controls)
-7. [State Management](#7-state-management)
-   - [7.1 State Flow](#71-state-flow)
-   - [7.2 Persistence](#72-persistence)
-8. [Middleware System](#8-middleware-system)
-9. [Advanced Features](#9-advanced-features)
-   - [9.1 Conditional Edges](#91-conditional-edges)
-   - [9.2 Subgraphs](#92-subgraphs)
-   - [9.3 Visualization Helpers](#93-visualization-helpers)
-10. [AI Inference Features](#10-ai-inference-features)
-    - [10.1 Supported Providers](#101-supported-providers)
-    - [10.2 Environment Configuration](#102-environment-configuration)
-    - [10.3 Function Calling (Tools)](#103-function-calling-tools)
-    - [10.4 Provider API](#104-provider-api)
-    - [10.5 Streaming and Thinking](#105-streaming-and-thinking)
-11. [API Reference](#11-api-reference)
-    - [11.1 Creating a Graph](#111-creating-a-graph)
-    - [11.2 Executing a Graph](#112-executing-a-graph)
-    - [11.3 Querying and Inspection](#113-querying-and-inspection)
-    - [11.4 Serialization](#114-serialization)
-12. [Usage Examples](#12-usage-examples)
-    - [12.1 Basic Node Graph](#121-basic-node-graph)
-    - [12.2 AI Workflows](#122-ai-workflows)
-    - [12.3 Streaming with Thinking](#123-streaming-with-thinking)
-    - [12.4 Function Calling](#124-function-calling)
-    - [12.5 Debug Mode](#125-debug-mode)
-    - [12.6 Visualization](#126-visualization)
-    - [12.7 Log Engine Usage](#127-log-engine-usage)
-13. [Design Decisions](#13-design-decisions)
-    - [13.1 Log Engine Architecture](#131-log-engine-architecture)
-    - [13.2 Logging Color Palette](#132-logging-color-palette)
-    - [13.3 Feature Comparison](#133-feature-comparison)
+   - [4.2.4 Graph State](#424-graph-state)
+   - [4.3 Log Engine](#43-log-engine)
+     - [4.3.1 Log Level Configuration](#431-log-level-configuration)
+     - [4.3.2 Background Color Hierarchy](#432-background-color-hierarchy)
+     - [4.3.3 Minimal Mode](#433-minimal-mode)
+     - [4.3.4 Verbose Mode](#434-verbose-mode)
+     - [4.3.5 Log Output Hierarchy](#435-log-output-hierarchy)
+     - [4.3.6 Log Engine Architecture](#436-log-engine-architecture)
+     - [4.3.7 Extending the Log Engine](#437-extending-the-log-engine)
+5. [Debug Execution Engine](#5-debug-execution-engine)
+   - [5.1 Force Full Log Mode](#51-force-full-log-mode)
+   - [5.2 Forced Streaming Display for Chat Nodes](#52-forced-streaming-display-for-chat-nodes)
+   - [5.3 Step-by-Step Execution](#53-step-by-step-execution)
+   - [5.4 Engine Architecture](#54-engine-architecture)
+   - [5.5 Keyboard Controls](#55-keyboard-controls)
+6. [State Management](#6-state-management)
+   - [6.1 State Flow](#61-state-flow)
+   - [6.2 Persistence](#62-persistence)
+7. [Middleware System](#7-middleware-system)
+8. [Advanced Features](#8-advanced-features)
+   - [8.1 Conditional Edges](#81-conditional-edges)
+   - [8.2 Subgraphs](#82-subgraphs)
+   - [8.3 Visualization Helpers](#83-visualization-helpers)
+9. [AI Inference Features](#9-ai-inference-features)
+   - [9.1 Supported Providers](#91-supported-providers)
+   - [9.2 Environment Configuration](#92-environment-configuration)
+   - [9.3 Function Calling (Tools)](#93-function-calling-tools)
+   - [9.4 Provider API](#94-provider-api)
+   - [9.5 Streaming and Thinking](#95-streaming-and-thinking)
+   - [9.6 Interactive Chat Node](#96-interactive-chat-node)
+10. [API Reference](#10-api-reference)
+    - [10.1 Creating a Graph](#101-creating-a-graph)
+    - [10.2 Executing a Graph](#102-executing-a-graph)
+    - [10.3 Querying and Inspection](#103-querying-and-inspection)
+    - [10.4 Serialization](#104-serialization)
+11. [Usage Examples](#11-usage-examples)
+    - [11.1 Basic Node Graph](#111-basic-node-graph)
+    - [11.2 AI Workflows](#112-ai-workflows)
+    - [11.3 Streaming with Thinking](#113-streaming-with-thinking)
+    - [11.4 Function Calling](#114-function-calling)
+    - [11.5 Debug Mode](#115-debug-mode)
+    - [11.6 Visualization](#116-visualization)
+    - [11.7 Log Engine Usage](#117-log-engine-usage)
+12. [Design Decisions](#12-design-decisions)
+    - [12.1 Log Engine Architecture](#121-log-engine-architecture)
+    - [12.2 Logging Color Palette](#122-logging-color-palette)
+    - [12.3 Feature Comparison](#123-feature-comparison)
 
 ---
 
@@ -119,9 +120,9 @@ The core library provides the fundamental graph abstractions:
 | Middleware | Koa/Express-style interception and augmentation |
 | Visualization | Export to Mermaid and DOT formats |
 
-### 2.2 AI Inference Library (`@graph-kit/ai`)
+### 2.2 AI Inference Library
 
-The companion AI library extends GraphKit with AI-specific features:
+The companion AI module extends GraphKit with AI-specific features:
 
 | Feature | Description |
 |---------|-----|
@@ -324,24 +325,25 @@ class ExecutionEngine {
 }
 ```
 
-#### 4.2.2 Debug Execution (Interactive)
+#### 4.2.2 Debug Execution Engine
 
-`DebuggingEngine` provides interactive step-through mode with rich CLI feedback. It automatically forces verbose logging and streaming for all chat nodes.
+`DebugExecutionEngine` is a standalone execution engine with rich CLI feedback,
+lifecycle hooks, streaming support, and optional step-by-step mode.
 
-- Step-by-step execution via `stepExecution: true`
+- Step-by-step execution via `stepMode: true`
 - Rich CLI feedback with colors, timing, and data previews
 - Real-time LLM streaming display (thinking and response)
 - Lifecycle hooks (`onNodeStart`, `onNodeComplete`, `onNodeError`, `onStreamChunk`)
 - Comprehensive execution logging via `executionLog`
-- Stream state tracking with `#streamState`, `#streamStarted` maps
+- Stream state tracking via the `llmStreamChunk` graph event
 
 ```typescript
-const debugEngine = new DebuggingEngine({
-  stepExecution: true,
+const debugEngine = new DebugExecutionEngine({
+  stepMode: true,
   onNodeStart: (info) => console.log(`Starting: ${info.nodeId}`),
   onNodeComplete: (info) => console.log(`Completed: ${info.nodeId}`),
-  onNodeError: (error) => console.error(`Error: ${error.message}`),
-  onStreamChunk: (chunk) => process.stdout.write(chunk.content),
+  onNodeError: (info) => console.error(`Error: ${info.error}`),
+  onStreamChunk: (chunk) => console.log(`Stream: ${chunk.state.response.length} chars`),
 });
 await debugEngine.execute(graph);
 ```
@@ -349,19 +351,23 @@ await debugEngine.execute(graph);
 **Constructor Signature:**
 
 ```typescript
-interface DebuggingEngineConfig {
-  stepExecution?: boolean;      // Enable step-by-step mode
-  forceFullLog?: boolean;       // Force verbose logging (default: true)
-  forceStreaming?: boolean;     // Force streaming on chat nodes (default: true)
-  onNodeStart?: (info: NodeInfo) => void;
-  onNodeComplete?: (info: NodeInfo) => void;
-  onNodeError?: (error: Error) => void;
-  onStreamChunk?: (chunk: StreamChunk) => void;
-}
+class DebugExecutionEngine {
+  constructor(config?: {
+    stepMode?: boolean;          // Enable step-by-step mode (default: false)
+    forceFullLog?: boolean;      // Force verbose logging (default: false)
+    forceStreaming?: boolean;    // Force streaming on chat nodes (default: false)
+    logLevel?: LogLevel;
+    onNodeStart?: (info: NodeDebugInfo) => void;
+    onNodeComplete?: (info: NodeDebugInfo) => void;
+    onNodeError?: (info: NodeDebugInfo) => void;
+    onStreamChunk?: (state: DebugStreamState) => void;
+  });
 
-class DebuggingEngine extends ExecutionEngine {
-  constructor(config: DebuggingEngineConfig);
-  execute(graph: Graph): Promise<ExecutionResult>;
+  execute(graph: Graph, initialState?: GraphState): Promise<GraphState>;
+  cancel(): void;
+  reset(): void;
+  get executionLog(): ReadonlyArray<NodeDebugInfo>;
+  get isCancelled(): boolean;
 }
 ```
 
@@ -730,214 +736,110 @@ const customEngine = new ExecutionEngine({
 
 ---
 
-## 6. Debugging Engine
+## 5. Debug Execution Engine
 
-The Debugging Engine provides advanced debugging capabilities for graph execution, forcing verbose logging, streaming display, and step-by-step execution control.
+The `DebugExecutionEngine` is a standalone execution engine with rich CLI
+feedback, lifecycle hooks, streaming support, and optional step-by-step mode. It
+runs nodes in topological order, displaying real-time execution progress with
+color-coded output for inputs, outputs, timing, and streaming content.
 
-### 6.1 Force Full Log Mode
+### 5.1 Configuration
 
-The Debugging Engine **always forces verbose logging** regardless of the configured log level. This ensures complete visibility into node execution, data flows, timing, and state changes.
-
-**Override behavior:**
-
-- **Muted/Minimal modes are overridden**: Even if `logLevel: 'muted'` or `logLevel: 'minimal'` is configured, the Debugging Engine forces `logLevel: 'verbose'`
-- **Full execution trace**: Every node input/output, timing measurement, and state transition is logged
-- **Debug metadata**: Additional context such as node execution order, port connections, and intermediate state snapshots are included
-- **Performance metrics**: Execution time per node, total graph execution time, and streaming latency are tracked and displayed
+The engine accepts an optional config object — there is no separate config
+interface; all options are passed inline:
 
 ```typescript
-const debugEngine = new DebuggingEngine({
-  forceFullLog: true, // Always enables verbose logging
-});
-// Even with muted mode configured, verbose output is enforced
-```
-
-### 6.2 Forced Streaming Display for Chat Nodes
-
-The Debugging Engine **forces all chat/LLM nodes to use and display streaming generation**, regardless of the node's streaming configuration.
-
-- **Streaming forced**: Nodes with `streaming: false` automatically switch to streaming mode when executed through the Debugging Engine
-- **Real-time display**: Each streaming chunk is displayed in real-time as it arrives from the LLM provider
-- **Thinking display**: LLM thinking/reasoning content is displayed with the `accentHighlight` (vivid purple) color
-- **Response display**: Final response content is displayed with the `success` (vibrant green) color
-- **Progress indicators**: Visual progress indicators show streaming completion status
-
-```typescript
-const debugEngine = new DebuggingEngine({
-  forceStreaming: true, // All chat nodes stream regardless of config
-});
-
-// Even if node data has streaming: false, it will stream during debug execution
-const node = graph.addNode('ollama-chat', {
-  data: {
-    model: 'llama3',
-    prompt: 'Explain quantum computing',
-    streaming: false, // Overridden to true by debug engine
-  }
-});
-```
-
-### 6.3 Step-by-Step Execution
-
-The Debugging Engine supports **interactive step-by-step execution** with keyboard controls. Execution starts with the first node and then pauses, waiting for user input.
-
-- **Automatic first node execution**: The first executable node runs immediately when `execute()` is called
-- **Pause between nodes**: After each node completes, execution pauses until user input
-- **Space bar**: Continue to the next executable node
-- **Escape key**: Cancel the entire execution immediately
-- **Dependency resolution**: Only nodes whose inputs are satisfied by completed nodes are shown as executable
-- **Visual indicator**: Currently paused state is shown with a blinking cursor indicator
-
-```typescript
-const debugEngine = new DebuggingEngine({
-  stepExecution: true, // Enable step-by-step mode
-});
-
-await debugEngine.execute(graph);
-
-// Execution flow:
-// 1. First node executes automatically
-// 2. Engine pauses, displays: "Press SPACE to continue, ESC to cancel"
-// 3. User presses SPACE → next executable node runs
-// 4. Repeat until all nodes complete or ESC pressed
-```
-
-### 6.4 Debugging Engine Architecture
-
-The Debugging Engine combines multiple subsystems to provide comprehensive debugging capabilities:
-
-```typescript
-class DebuggingEngine extends ExecutionEngine {
-  private config: DebuggingEngineConfig;
-  protected debugState: DebugState;
-  protected stepController: StepController;
-  
-  constructor(config: DebuggingEngineConfig) {
-    super({ logLevel: 'verbose' }); // Always forces verbose
-    this.config = config;
-    this.debugState = {
-      stepMode: config.stepExecution ?? false,
-      forceFullLog: config.forceFullLog ?? true,
-      forceStreaming: config.forceStreaming ?? true,
-      isPaused: false,
-      currentNodeId: null,
-      cancelled: false,
-    };
-  }
-  
-  async execute(graph: Graph): Promise<ExecutionResult> {
-    // Force full log mode (always active by default)
-    if (this.config.forceFullLog !== false) {
-      this.forceVerboseLogging();
-    }
-    
-    // Start execution
-    const firstNode = this.findFirstExecutableNode(graph);
-    await this.executeNode(firstNode);
-    
-    // Enter step mode if enabled
-    if (this.config.stepExecution) {
-      this.stepController = new StepController({
-        onResume: () => this.executeNextNode(graph),
-        onCancel: () => this.cancelExecution(),
-      });
-      this.debugState.isPaused = true;
-      await this.stepController.waitForInput();
-    }
-    
-    // Enforce streaming for chat nodes
-    this.forceStreamingOnChatNodes(graph);
-    
-    return this.debugState.cancelled
-      ? { cancelled: true, partialResults: this.getPartialResults() }
-      : this.getFinalResult();
-  }
-  
-  private forceStreamingOnChatNodes(graph: Graph): void {
-    for (const node of graph.nodes) {
-      if (node.type === 'chat' || node.type === 'ollama-chat') {
-        if (!node.data.streaming) {
-          console.log('[Debug] Forced streaming for chat node:', node.id);
-          node.data.streaming = true;
-        }
-      }
-    }
-  }
-}
-
-interface DebuggingEngineConfig {
-  stepExecution?: boolean;      // Enable step-by-step mode
-  forceFullLog?: boolean;       // Force verbose logging (default: true)
-  forceStreaming?: boolean;     // Force streaming on chat nodes (default: true)
-  onNodeStart?: (info: NodeInfo) => void;
-  onNodeComplete?: (info: NodeInfo) => void;
-  onNodeError?: (error: Error) => void;
-  onStreamChunk?: (chunk: StreamChunk) => void;
-}
-
-interface DebugState {
-  stepMode: boolean;
-  forceFullLog: boolean;
-  forceStreaming: boolean;
-  isPaused: boolean;
-  currentNodeId: string | null;
-  cancelled: boolean;
+class DebugExecutionEngine {
+  constructor(config?: {
+    stepMode?: boolean;          // Pause between nodes (default: false)
+    forceFullLog?: boolean;      // Force verbose logging (default: false)
+    forceStreaming?: boolean;    // Force streaming on chat nodes (default: false)
+    logLevel?: 'silent' | 'muted' | 'minimal' | 'verbose';
+    onNodeStart?: (info: NodeDebugInfo) => void;
+    onNodeComplete?: (info: NodeDebugInfo) => void;
+    onNodeError?: (info: NodeDebugInfo) => void;
+    onStreamChunk?: (state: DebugStreamState) => void;
+  });
 }
 ```
 
-### 6.5 Keyboard Controls
+- **`stepMode`**: When `true`, execution pauses before each node. Press
+  `SPACE` to continue or `ESC` to cancel.
+- **`forceFullLog`**: When `true`, sets `logLevel` to `'verbose'` for full
+  execution trace including all node inputs/outputs.
+- **`forceStreaming`**: When `true`, overrides `streaming: false` on all chat
+  nodes to enable real-time streaming display.
+- **`logLevel`**: Log verbosity (`'silent'`, `'muted'`, `'minimal'`,
+  `'verbose'`). Defaults to `'minimal'` unless `forceFullLog` is `true`.
 
-The Debugging Engine provides interactive keyboard controls for step-by-step execution:
+### 5.2 Lifecycle Hooks
 
-| Key | Action | Description |
-|-----|------|-----|
-| `Space` | Continue | Execute the next executable node |
-| `Escape` | Cancel | Terminate graph execution immediately |
-
-**Visual Feedback:**
-
-- **Paused state**: `[PAUSED] Press SPACE to continue, ESC to cancel` (with blinking cursor)
-- **Node executing**: `▶ Node [2/5]: process-data — Running...`
-- **Node complete**: `✓ Node [2/5]: process-data — Complete (125ms)`
-- **Streaming active**: `▸ Thinking... [accentHighlight color]` / `▸ Response... [success color]`
-- **Cancelled**: `⚠ Execution cancelled by user (3/5 nodes executed)`
+The engine provides four optional hooks for custom instrumentation:
 
 ```typescript
-const debugEngine = new DebuggingEngine({
-  stepExecution: true,
-  forceFullLog: true,
-  forceStreaming: true,
-  onNodeStart: (info) => {
-    console.log(`[Debug] ▶ Starting node: ${info.nodeId}`);
-  },
-  onNodeComplete: (info) => {
-    console.log(`[Debug] ✓ Completed node: ${info.nodeId}`);
-  },
-  onStreamChunk: (chunk) => {
-    process.stdout.write(chunk.content); // Stream to stdout
-  },
+const debugEngine = new DebugExecutionEngine({
+  onNodeStart: (info) => console.log(`Starting: ${info.nodeId}`),
+  onNodeComplete: (info) => console.log(`Done: ${info.nodeId} (${info.duration?.toFixed(0)}ms)`),
+  onNodeError: (info) => console.error(`Failed: ${info.nodeId}`, info.error),
+  onStreamChunk: (chunk) => process.stdout.write(chunk.state.response),
 });
-
-// Execution with keyboard controls
-const result = await debugEngine.execute(graph);
-
-if (result.cancelled) {
-  console.log(`Partial execution: ${result.partialResults.size} nodes completed`);
-}
 ```
+
+Each hook receives a `NodeDebugInfo` or `DebugStreamState` object with full
+execution metadata (node ID, type, inputs, outputs, duration, status, and
+predecessor/successor lists).
+
+### 5.3 Step-by-Step Execution
+
+Enabling `stepMode` pauses the engine before each node and waits for keyboard
+input:
+
+| Key | Action |
+|-----|--------|
+| `SPACE` | Execute the next node |
+| `ESC` | Cancel entire execution |
+
+After cancelling, the engine stops processing further nodes and the graph
+state contains partial results from completed nodes. Check `engine.isCancelled`
+to detect cancellation.
+
+```typescript
+const debugEngine = new DebugExecutionEngine({ stepMode: true });
+const state = await debugEngine.execute(graph);
+```
+
+### 5.4 Public API
+
+```typescript
+const engine = new DebugExecutionEngine(config);
+
+// Execute the graph (runs nodes in topological order)
+const state: GraphState = await engine.execute(graph, initialState?);
+
+// Cancel a running execution
+engine.cancel();
+
+// Reset execution log and cancellation state
+engine.reset();
+
+// Access execution log after run
+const log: ReadonlyArray<NodeDebugInfo> = engine.executionLog;
+
+// Check cancellation status
+const cancelled: boolean = engine.isCancelled;
+```
+
+The `GraphState` returned by `execute()` contains a `values` Map
+(`Map<string, unknown>`) keyed by `${nodeId}.${portId}` and an optional
+`messages` array for AI conversation history.
 
 ---
 
-## 7. State Management
+## 6. State Management
 
-### 7.1 State Flow
+### 6.1 State Flow
 
-- State flows through edges between nodes
-- Nodes read from input ports and write to output ports
-- State is managed in a `Map` within `GraphState`
-- Checkpoint state at each step for resumption
-
-### 7.2 Persistence
+### 6.2 Persistence
 
 Checkpoint state at each step and resume from any checkpoint. Supports in-memory or custom storage backends.
 
@@ -951,7 +853,7 @@ interface StateStore {
 
 ---
 
-## 8. Middleware System
+## 7. Middleware System
 
 GraphKit supports a middleware pattern similar to Koa or Express, allowing developers to intercept and augment node execution.
 
@@ -966,29 +868,13 @@ graph.use(async (context, next) => {
 
 ---
 
-## 9. Advanced Features
+## 8. Advanced Features
 
-### 9.1 Conditional Edges
+### 8.1 Conditional Edges
 
-Route execution flow based on graph state, enabling dynamic workflow branching.
+### 8.2 Subgraphs
 
-```typescript
-workflow.addConditionalEdge({
-  sourceNodeId: 'router',
-  condition: (state) => {
-    if (state.values.get('router.category') === 'technical') {
-      return 'tech-agent';
-    }
-    return 'general-agent';
-  }
-});
-```
-
-### 9.2 Subgraphs
-
-Nest graphs within nodes to encapsulate complex logic. (Planned feature)
-
-### 9.3 Visualization Helpers
+### 8.3 Visualization Helpers
 
 Export graphs to Mermaid and DOT formats for diagram generation. Built-in support for node colors and labels.
 
@@ -998,90 +884,30 @@ console.log(graph.toMermaid());
 
 ---
 
-## 10. AI Inference Features
+## 9. AI Inference Features
 
-### 10.1 Supported Providers
+### 9.1 Supported Providers
 
-| Provider | Local Inference | Streaming | Thinking | Function Calling |
-|------|:----:|:----:|:----:|:----:|
-| **Ollama** | ✅ | ✅ | ✅ | ✅ |
-| **OpenAI** | ❌ | ✅ | ✅ (o1) | ✅ |
-| **OpenRouter** | ❌ | ✅ | ✅ | ✅ |
+### 9.2 Environment Configuration
 
-- **Ollama**: Local inference with full streaming support and thinking content (e.g., LFM2.5, Granite models)
-- **OpenAI**: Compatible with any OpenAI-style API, supports thinking content for o1 models
-- **OpenRouter**: Access 200+ models via unified API, requires `OPENROUTER_API_KEY`, supports thinking models like DeepSeek R1
+### 9.3 Function Calling (Tools)
 
-### 10.2 Environment Configuration
+### 9.4 Provider API
 
-- Load API keys from `.env` file using `loadEnv()` utility
-- Supports `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `OLLAMA_BASE_URL` variables
-- Automatic fallback to environment variables if `.env` not present
+### 9.5 Streaming and Thinking
 
-### 10.3 Function Calling (Tools)
+### 9.6 Interactive Chat Node
 
-Both Ollama and OpenAI providers support OpenAI-compatible tool/function calling. Define tool schemas using `ToolDefinition` and pass them via `ChatRequest.tools`. The LLM may respond with `tool_calls` on the response message.
-
-#### 10.3.1 Tool Types
-
-```typescript
-interface FunctionDefinition {
-  name: string;
-  description?: string;
-  parameters: Record<string, unknown>; // JSON Schema
-}
-
-interface ToolDefinition {
-  type: 'function';
-  function: FunctionDefinition;
-}
-
-interface ToolCall {
-  id: string;
-  type: 'function';
-  function: {
-    name: string;
-    arguments: string; // JSON string
-  };
-}
-```
-
-#### 10.3.2 Message Flow
-
-1. Send user message + tool definitions → LLM responds with `tool_calls`
-2. Execute the requested function locally using `tc.function.name` and parsed `tc.function.arguments`
-3. Push the assistant's tool_calls message and tool result messages back
-4. LLM incorporates results into a final text response
-
-### 10.4 Provider API
-
-```typescript
-interface AIProvider {
-  chat(request: ChatRequest): Promise<ChatResponse>;
-  streamChat(request: ChatRequest): AsyncIterable<StreamChunk>;
-  listModels(): Promise<string[]>;
-}
-```
-
-### 10.5 Streaming and Thinking
-
-All AI providers (Ollama, OpenAI, OpenRouter) support streaming mode with thinking content. This is useful for models that expose their reasoning process (e.g., DeepSeek R1, LFM2.5, OpenAI o1).
-
-- Real-time streaming chunks via `on('llmStreamChunk', ...)`
-- Access thinking content via `result.values.get(`${nodeId}.thinking`)`
-- Access final response via `result.values.get(`${nodeId}.response`)
-
-### 10.6 Interactive Chat Node
-
-The `interactive-chat` node provides a terminal-based interactive chat session within a graph. It runs a multi-turn conversation loop in the terminal, sending user messages to an LLM and displaying responses in real-time.
+The `interactive-chat` node provides a dual-mode terminal chat node: it can run as an **interactive REPL** (reading from stdin) or as a **workflow node** (receiving `userMessage` via edges from other nodes). It supports multiple AI providers with streaming, tool-calling, and session-persisted conversation history.
 
 **Key features:**
-- **Terminal REPL**: Reads user input from stdin, sends to Ollama, displays response
-- **Multi-turn conversations**: Maintains conversation history across turns
-- **Streaming support**: Real-time display of thinking and response content
-- **Initial prompt**: Auto-send a first message to start the conversation
+- **Dual mode**: Interactive REPL mode for direct terminal use, and workflow mode for graph-based pipelines
+- **Multi-provider**: Supports Ollama, OpenAI-compatible, and OpenRouter providers
+- **Tool-calling loop**: Automatic multi-round function calling with tool result feedback (max 10 turns)
+- **Streaming support**: Real-time display of thinking and response content (both modes)
+- **Session persistence**: Conversation history stored per `sessionId` across executions
+- **Configurable**: Provider, model, system prompt, temperature, API keys, streaming toggle
 - **Debug mode compatible**: Works with `DebugExecutionEngine` step-by-step execution
-- **Configurable**: Model, system prompt, temperature, streaming toggle
 
 **Node interface:**
 
@@ -1089,12 +915,22 @@ The `interactive-chat` node provides a terminal-based interactive chat session w
 graph.registerNodeType('interactive-chat', getInteractiveChatNodeType());
 
 // Inputs:
+// - provider: string (default: 'ollama') — AI provider: 'ollama', 'openai', or 'openrouter'
 // - model: string (default: 'llama3') — LLM model name
 // - systemPrompt: string (optional) — System prompt for the conversation
 // - temperature: number (default: 0.7) — LLM temperature
 // - streaming: boolean (default: true) — Enable streaming output
-// - initialPrompt: string (optional) — First message to auto-send
-// - baseUrl: string (optional) — Custom Ollama base URL
+// - userMessage: string (optional) — When provided, the node runs in workflow mode
+//   (single-turn send + response) instead of interactive REPL mode
+// - initialPrompt: string (optional) — First message to auto-send in REPL mode
+// - apiKey: string (optional) — API key for OpenAI or OpenRouter providers
+// - baseUrl: string (optional) — Custom base URL for the provider
+// - tools: InteractiveTool[] (optional) — Tool definitions and handlers for
+//   tool-calling. When provided, the node runs a tool-calling loop instead of
+//   streaming: the model may request tool invocations, results are fed back,
+//   and the loop continues until a text response is returned (max 10 turns).
+// - sessionId: string (optional, default: nodeId) — Conversation session key
+//   for persisting message history across workflow executions
 
 // Outputs:
 // - response: string — Last AI response in the conversation
@@ -1102,7 +938,25 @@ graph.registerNodeType('interactive-chat', getInteractiveChatNodeType());
 // - tokenCount: number — Total tokens used
 ```
 
-**Terminal output example during execution:**
+**Workflow mode vs Interactive mode:**
+
+The node automatically selects its mode based on the `userMessage` input:
+
+- **Workflow mode** (when `userMessage` is provided via an edge): Sends the message
+  to the LLM, handles tool-calling loops if tools are configured, captures streaming
+  output, and returns the final response. No terminal interaction occurs.
+- **Interactive REPL mode** (when `userMessage` is absent): Enters a terminal
+  read-eval-print loop that reads from stdin, supports `initialPrompt`,
+  `exit`/`quit`/`q` commands, and displays tool calls inline.
+
+**Session persistence:**
+
+Conversation history is stored in the graph state under the key
+`__interactive_chat_{sessionId}`. This allows multi-turn conversations to persist
+across workflow cycles (e.g., in a loop that routes back to the same node). Each
+node can have its own `sessionId` or share one with other nodes for shared context.
+
+**Terminal output example during execution (REPL mode):**
 
 ```
   ┌────── Interactive Chat ──────┐
@@ -1140,9 +994,9 @@ You: exit
 
 ---
 
-## 11. API Reference
+## 10. API Reference
 
-### 11.1 Creating a Graph
+### 10.1 Creating a Graph
 
 ```typescript
 import { GraphKit, registerOllamaNodes } from './mod.ts';
@@ -1158,20 +1012,20 @@ const node1 = graph.addNode('ollama-chat', {
   data: {
     model: 'llama3',
     prompt: 'Hello, world!',
-    temperature: 0.7
-  }
+    temperature: 0.7,
+  },
 });
 ```
 
-### 11.2 Executing a Graph
+### 10.2 Executing a Graph
 
 ```typescript
 // Sequential execution (minimal logging by default)
 const engine = new ExecutionEngine({ logLevel: 'minimal' });
-const result = await engine.execute(graph);
+const state = await engine.execute(graph);
 
 // With explicit log level
-const result = await engine.execute(graph, { logLevel: 'verbose' });
+const state = await engine.execute(graph, { logLevel: 'verbose' });
 
 // Using Workflow for complex flows
 const workflow = graph.createWorkflow({
@@ -1182,18 +1036,18 @@ const workflow = graph.createWorkflow({
 });
 await workflow.run();
 
-// Using Debugging Engine (forces verbose + streaming + step mode)
-import { DebuggingEngine } from './mod.ts';
+// Using DebugExecutionEngine for interactive debugging
+import { DebugExecutionEngine } from './mod.ts';
 
-const debugEngine = new DebuggingEngine({
-  stepExecution: true,
-  forceFullLog: true,
-  forceStreaming: true,
+const debugEngine = new DebugExecutionEngine({
+  stepMode: true,
+  onNodeStart: (info) => console.log(`Starting: ${info.nodeId}`),
+  onNodeComplete: (info) => console.log(`Done: ${info.nodeId}`),
 });
 await debugEngine.execute(graph);
 ```
 
-### 11.3 Querying and Inspection
+### 10.3 Querying and Inspection
 
 ```typescript
 // Get graph structure
@@ -1204,7 +1058,7 @@ const edges = graph.edges;
 const errors = graph.validate();
 ```
 
-### 11.4 Serialization
+### 10.4 Serialization
 
 ```typescript
 // Serialize to JSON
@@ -1216,24 +1070,24 @@ const restored = GraphKit.fromJSON(json);
 
 ---
 
-## 12. Usage Examples
+## 11. Usage Examples
 
-### 12.1 Basic Node Graph
+### 11.1 Basic Node Graph
 
 ```typescript
-import { GraphKit, registerOllamaNodes } from './mod.ts';
+import { GraphKit } from './mod.ts';
 
 const graph = GraphKit.createGraph();
 
 graph.registerNodeType('add', {
   inputs: [
     { id: 'a', name: 'A', type: 'number', required: true },
-    { id: 'b', name: 'B', type: 'number', required: true }
+    { id: 'b', name: 'B', type: 'number', required: true },
   ],
   outputs: [{ id: 'result', name: 'Result', type: 'number' }],
   execute: async (inputs: any) => ({
-    result: inputs.a + inputs.b
-  })
+    result: inputs.a + inputs.b,
+  }),
 });
 
 const n1 = graph.addNode('add', { data: { a: 5, b: 3 } });
@@ -1243,28 +1097,24 @@ graph.addEdge({
   sourceNodeId: n1.id,
   sourcePortId: 'result',
   targetNodeId: n2.id,
-  targetPortId: 'a'
+  targetPortId: 'a',
 });
 
-const result = await graph.execute();
-console.log(result.values.get(`${n2.id}.result`)); // 18
+const state = await graph.execute();
+console.log(state.values.get(`${n2.id}.result`)); // 18
 ```
 
-### 12.2 AI Workflows
-
-**OpenRouter Multi-Model Example:**
+### 11.2 AI Workflows
 
 ```typescript
 import { loadEnv } from './src/utils/dotenv.ts';
 import { GraphKit, registerOpenRouterNodes } from './mod.ts';
 
-// Load API key from .env file
 await loadEnv();
 
 const graph = GraphKit.createGraph({ name: 'OpenRouter Example' });
 registerOpenRouterNodes(graph);
 
-// Use any model from openrouter.ai/models
 const chatNode = graph.addNode('openrouter-chat', {
   data: {
     model: 'anthropic/claude-3-haiku',
@@ -1274,11 +1124,11 @@ const chatNode = graph.addNode('openrouter-chat', {
   },
 });
 
-const result = await graph.execute();
-console.log('Response:', result.values.get(`${chatNode.id}.response`));
+const state = await graph.execute();
+console.log('Response:', state.values.get(`${chatNode.id}.response`));
 ```
 
-### 12.3 Streaming with Thinking
+### 11.3 Streaming with Thinking
 
 ```typescript
 import { loadEnv } from './src/utils/dotenv.ts';
@@ -1291,14 +1141,13 @@ registerOpenRouterNodes(graph);
 
 const chatNode = graph.addNode('openrouter-chat', {
   data: {
-    model: 'deepseek/deepseek-r1', // Model with thinking support
+    model: 'deepseek/deepseek-r1',
     prompt: 'Solve: What is 15 * 23?',
     streaming: true,
     temperature: 0.7,
   },
 });
 
-// Listen for streaming chunks (thinking and response)
 graph.on('llmStreamChunk', ({ nodeId, state }) => {
   if (state.thinking) {
     console.log('Thinking:', state.thinking);
@@ -1316,30 +1165,66 @@ if (thinking) {
 }
 ```
 
-### 12.4 Function Calling
+### 11.4 Function Calling
 
 ```typescript
-import { createOllamaProvider } from "../ai/providers/ollama.ts";
-import type { ToolDefinition, ChatMessage } from "../ai/providers/types.ts";
+import { createOllamaProvider } from '../ai/providers/ollama.ts';
+import type { ToolDefinition, ChatMessage } from '../ai/providers/types.ts';
 
 const weatherTool: ToolDefinition = {
-  type: "function",
+  type: 'function',
   function: {
-    name: "get_weather",
-    description: "Get the current weather for a location",
+    name: 'get_weather',
+    description: 'Get the current weather for a location',
     parameters: {
-      type: "object",
-      properties: { location: { type: "string" } },
-      required: ["location"],
+      type: 'object',
+      properties: { location: { type: 'string' } },
+      required: ['location'],
     },
   },
 };
+
+async function getWeather(location: string): Promise<string> {
+  return `The weather in ${location} is 22°C and sunny.`;
+}
+
+const ollama = createOllamaProvider();
+const messages: ChatMessage[] = [
+  { role: 'user', content: "What's the weather in Tokyo?" },
+];
+
+let iterations = 0;
+while (iterations < 5) {
+  iterations++;
+  const response = await ollama.chat({
+    model: 'llama3.1',
+    messages,
+    tools: [weatherTool],
+  });
+
+  if (response.message.tool_calls) {
+    messages.push(response.message);
+    for (const tc of response.message.tool_calls) {
+      const args = JSON.parse(tc.function.arguments);
+      const result = await getWeather(args.location);
+      messages.push({ role: 'tool', content: result, tool_call_id: tc.id });
+    }
+  } else {
+    console.log('Final:', response.message.content);
+    break;
+  }
+}
 ```
 
-### 12.5 Debug Mode
+See [`examples/ai-function-calling.ts`](examples/ai-function-calling.ts) for the full working example.
+
+### 11.5 Debug Mode
 
 ```typescript
+import { GraphKit, registerOllamaNodes, DebugExecutionEngine } from './mod.ts';
+
 const graph = GraphKit.createGraph({ name: 'Debug Example' });
+registerOllamaNodes(graph);
 
 const aiNode = graph.addNode('ollama-chat', {
   data: {
@@ -1352,48 +1237,45 @@ const aiNode = graph.addNode('ollama-chat', {
   metadata: { label: 'AI Assistant' },
 });
 
-const debugEngine = new DebuggingEngine({
-  stepExecution: true,
-  forceFullLog: true,
-  forceStreaming: true,
+const debugEngine = new DebugExecutionEngine({
+  stepMode: true,
   onNodeStart: (info) => console.log(`[Debug] ▶ ${info.nodeId}`),
   onNodeComplete: (info) => console.log(`[Debug] ✓ ${info.nodeId}`),
-  onNodeError: (error) => console.error(`[Debug] ✗ ${error.message}`),
-  onStreamChunk: (chunk) => process.stdout.write(chunk.content),
+  onNodeError: (info) => console.error(`[Debug] ✗ ${info.nodeId}`, info.error),
+  onStreamChunk: (chunk) => process.stdout.write(chunk.state.response),
 });
 
-const result = await debugEngine.execute(graph);
-if (result.cancelled) {
-  console.log(`Partial execution: ${result.partialResults.size} nodes completed`);
-}
+const state = await debugEngine.execute(graph);
 ```
 
-### 12.6 Visualization
+### 11.6 Visualization
 
 ```typescript
 const graph = GraphKit.createGraph({ name: 'My Workflow' });
 console.log(graph.toMermaid());
 ```
 
-### 12.7 Log Engine Usage
+### 11.7 Log Engine Usage
 
 ```typescript
+import { GraphKit, ExecutionEngine } from './mod.ts';
+
 const graph = GraphKit.createGraph({ name: 'Logging Example' });
 
 // Muted mode — no logging
-const mutedEngine = new ExecutionEngine({ logLevel: 'muted' });
-const result1 = await mutedEngine.execute(graph);
+const muted = new ExecutionEngine({ logLevel: 'muted' });
+await muted.execute(graph);
 
 // Minimal mode (default)
-const minimalEngine = new ExecutionEngine({ logLevel: 'minimal' });
-const result2 = await minimalEngine.execute(graph);
+const minimal = new ExecutionEngine({ logLevel: 'minimal' });
+await minimal.execute(graph);
 
 // Verbose mode — full debug output
-const verboseEngine = new ExecutionEngine({ logLevel: 'verbose' });
-const result3 = await verboseEngine.execute(graph);
+const verbose = new ExecutionEngine({ logLevel: 'verbose' });
+await verbose.execute(graph);
 ```
 
-### 12.8 Interactive Chat
+### 11.8 Interactive Chat
 
 The `interactive-chat` node creates a terminal-based REPL session for multi-turn conversations with an LLM. It works with both the standard execution engine and the debug engine.
 
@@ -1405,7 +1287,7 @@ import { GraphKit, registerInteractiveChatNode } from './mod.ts';
 const graph = GraphKit.createGraph({ name: 'Chat Session' });
 registerInteractiveChatNode(graph);
 
-graph.addNode('interactive-chat', {
+const chatNode = graph.addNode('interactive-chat', {
   metadata: { label: 'Terminal Chat' },
   data: {
     model: 'llama3.2',
@@ -1455,13 +1337,9 @@ class FileLogger implements LogLogger {
   log(level: LogLevel, message: string): void {
     this.writeToFile(message);
   }
-  
+
   private writeToFile(message: string): void {
-    const entry = {
-      timestamp: new Date().toISOString(),
-      level,
-      message,
-    };
+    const entry = { timestamp: new Date().toISOString(), level, message };
     // Write to file implementation
   }
 }
@@ -1478,7 +1356,6 @@ class JsonFormatter implements LogFormatter {
   }
 }
 
-// Override default engine
 const customEngine = new ExecutionEngine({
   logLevel: 'verbose',
   logger: new FileLogger(),
@@ -1490,202 +1367,15 @@ const result = await customEngine.execute(graph);
 
 ---
 
-## 13. Design Decisions
+## 12. Design Decisions
 
-### 13.1 Log Engine Architecture
+### 12.1 Log Engine Architecture
 
-The log engine is designed as an extensible, overrideable system that can be customized by developers while providing sensible defaults out of the box.
+### 12.2 Logging Color Palette
 
-#### 13.1.1 Architecture Principles
+### 12.3 Feature Comparison
 
-1. **Composability**: Log engines can be composed with custom loggers and formatters
-2. **Override Capability**: Developers can completely replace the default logging behavior
-3. **Color Consistency**: All output uses the defined color palette for visual hierarchy
-4. **Hierarchical Levels**: Fine-grained control over logging verbosity
-5. **Performance**: Muted mode has zero overhead; minimal mode uses efficient formatting
-
-#### 13.1.2 Core Components
-
-```typescript
-// Abstract base class for all log engines
-abstract class LogEngine {
-  protected config: LogEngineConfig;
-  
-  // Template method pattern for extensibility
-  public log(level: LogLevel, message: LogMessage): void {
-    if (!this.shouldLog(level)) return;
-    const formatted = this.formatMessage(message);
-    this.write(formatted);
-  }
-  
-  // Override these methods to customize behavior
-  protected abstract write(output: string): void;
-  protected formatMessage(message: LogMessage): string {
-    return `${message.level}: ${message.text}`;
-  }
-  protected shouldLog(level: LogLevel): boolean {
-    return this.config.logLevel !== 'muted';
-  }
-}
-
-// Default console logger
-class ConsoleLogger implements LogLogger {
-  log(level: LogLevel, message: LogMessage): void {
-    const colored = this.applyColors(message.text, this.getColorForKey(level));
-    console[level === 'error' ? 'error' : 'log'](colored);
-  }
-}
-
-// Default formatter with hierarchy
-class DefaultFormatter implements LogFormatter {
-  format(message: LogMessage): string {
-    const prefix = this.getPrefixForLevel(message.level);
-    return `${prefix} ${message.text}`;
-  }
-  
-  private getPrefixForLevel(level: LogLevel): string {
-    switch (level) {
-      case 'error': return '✗';
-      case 'warn': return '⚠';
-      case 'info': return '●';
-      case 'debug': return '▸';
-      case 'trace': return '  ▸';
-      default: return '';
-    }
-  }
-}
-```
-
-#### 13.1.3 Extension Points
-
-Developers can customize the log engine at three levels:
-
-1. **Logger Replacement**: Provide a custom `LogLogger` implementation
-2. **Formatter Replacement**: Provide a custom `LogFormatter` implementation
-3. **Engine Inheritance**: Extend `LogEngine` for complete customization
-
-```typescript
-// Example: File-based logging
-class FileLoggingEngine extends LogEngine {
-  protected write(output: string): void {
-    this.fileStream.write(output + '\n');
-  }
-}
-
-// Example: Remote logging
-class RemoteLoggingEngine extends LogEngine {
-  protected write(output: string): void {
-    fetch('https://logs.example.com/api', {
-      method: 'POST',
-      body: JSON.stringify({ output }),
-    });
-  }
-}
-```
-
-#### 13.1.4 Color Scheme Integration
-
-The log engine uses the defined color palette for consistent visual hierarchy:
-
-| Visual Element | Color Key | Hex Code | Usage |
-|------|-----------|--------|-------|
-| Node identifiers | `accent` | `#6282ff` | Node names, IDs, labels |
-| Streaming thinking | `accentHighlight` | `#8b5cf6` | LLM reasoning content |
-| Streaming response | `success` | `#a6e46c` | LLM output content |
-| Timing/duration | `warning` | `#f9c650` | Execution time displays |
-| Success markers | `success` | `#a6e46c` | Completion checks (✓) |
-| Error markers | `error` | `#f87171` | Failure indicators (✗) |
-| Warning markers | `warning` | `#f9c650` | Caution indicators (⚠) |
-| Info/status | `info` | `#89ddff` | Status updates, context |
-| Primary text | `textPrimary` | `#dcdcdc` | Main content text |
-| Secondary text | `textSecondary` | `#919198` | Timestamps, metadata |
-| Muted text | `textMuted` | `#555761` | Disabled/inactive elements |
-| Surface background | `bgSurface` | `#18181b` | Card/backgrounds |
-| Elevated background | `bgElevated` | `#242427` | Popups, modals |
-| Debug metadata background | `bgGray` | `#18181b` | Debug metadata, auxiliary info |
-| Accent background | `bgAccent` | `#6282ff20` | Highlighted sections |
-| Success background | `bgSuccess` | `#a6e46c20` | Success banners |
-| Error background | `bgError` | `#f8717120` | Error banners |
-
-#### 13.1.5 Output Hierarchy
-
-The log engine displays information with a clear visual hierarchy using background colors — **no outline characters are used**. Each hierarchy level is visually distinguished by its background color, creating clear visual grouping without the need for box-drawing characters.
-
-**Hierarchy structure:**
-
-```
-Level 1: Graph-level events (start/end)
-  [bgElevated] — Elevated surface background (#242427)
-  
-Level 2: Node-level events (start/complete/error)
-  [bgSurface] — Standard surface background (#18181b)
-  ├── Level 3: Port-level events (inputs/outputs)
-  │   No background — clean text display
-  └── Level 3: Timing information
-      No background — clean text display
-      └── Level 4: Streaming content (verbose only)
-           [bgAccent-tint] — Subtle blue tint (#6282ff20)
-  └── Level 3: Debug metadata (verbose only)
-      [bgGray] — Muted background with textMuted
-
-**Visual formatting rules:**
-
-1. **Graph boundaries**: Use `bgElevated` background (no box characters) with `textPrimary` text
-2. **Node blocks**: Use `bgSurface` background for entire node execution blocks (no box characters)
-3. **Node progression**: Use sequential numbering with `accent` color
-4. **Status indicators**: Use symbolic markers (●, ✓, ✗, ⚠) with appropriate colors
-5. **Metadata**: Use `textSecondary` for timestamps, `textMuted` for optional info
-6. **Streaming content**: Indent with `▸` prefix, apply `bgAccent-tint` background
-7. **Error states**: Use `error` color with bold formatting for emphasis
-8. **Spacing**: Use blank lines between major hierarchy levels instead of separator characters
-
-**Important clarification:** The symbols (●, ✓, ✗, ⚠, ▸) are Unicode characters used for semantic clarity within the text content, not outline/box-drawing characters. They serve as inline status indicators. Background colors provide the visual grouping and hierarchy.
-
-### 13.2 Logging Color Palette
-
-All CLI logging output uses a modern dark grayscale color scheme with vibrant accent highlights:
-
-```typescript
-const Colors = {
-  bg: '\x1b[48;2;13;13;14m',     // Deep background (near black)
-  bgSurface: '\x1b[48;2;24;24;27m', // Surface/cards (dark gray)
-  bgElevated: '\x1b[48;2;36;36;39m', // Elevated surfaces
-  bgGray: '\x1b[48;2;24;24;27m', // Surface backgrounds (alias for bgSurface)
-  textPrimary: '\x1b[38;2;220;220;224m', // Primary text (light gray)
-  textSecondary: '\x1b[38;2;145;145;152m', // Secondary text (muted)
-  textMuted: '\x1b[38;2;85;87;97m', // Tertiary text (dim)
-  accent: '\x1b[38;2;98;130;255m', // Primary accent (electric blue)
-  accentHighlight: '\x1b[38;2;139;92;246m', // Highlight (vivid purple)
-  success: '\x1b[38;2;166;228;108m', // Success (vibrant green)
-  warning: '\x1b[38;2;249;198;80m', // Warning (amber)
-  error: '\x1b[38;2;248;113;113m', // Error (bright red)
-  info: '\x1b[38;2;137;221;255m', // Info (bright cyan)
-  bgAccent: '\x1b[48;2;98;130;255m', // Accent backgrounds
-  bgSuccess: '\x1b[48;2;166;228;108m', // Success backgrounds
-  bgError: '\x1b[48;2;248;113;113m', // Error backgrounds
-};
-```
-
-**Color Usage Reference:**
-
-| Context | Color | Usage |
-|---------|-----|-------|
-| Node IDs | `accent` | Node identifiers, input/output labels |
-| Thinking streams | `textMuted` | LLM reasoning display in verbose mode |
-| Response streams | `textPrimary` | LLM final response display in verbose mode |
-| Timing/duration | `warning` | Execution timing, warnings |
-| Success/completion | `success` | Completed nodes, successful operations |
-| Errors/failures | `error` | Failed nodes, error messages |
-| Info/status | `info` | Info messages, state changes |
-| Surface backgrounds | `bgSurface` | Node execution blocks, card backgrounds |
-| Elevated backgrounds | `bgElevated` | Graph boundaries, section headers, popups, modals |
-| Accent backgrounds | `bgAccent` | Highlighted sections, streaming content tint |
-| Success backgrounds | `bgSuccess` | Success banners |
-| Error backgrounds | `bgError` | Error banners |
-
-### 13.3 Feature Comparison
-
-| Feature | GraphKit Core | `@graph-kit/ai` |
+| Feature | GraphKit Core | AI Module |
 |---------|:------:|:------:|
 | Node/Edge/Graph API | ✅ | ✅ (via core) |
 | Execution Engine | ✅ | ✅ (via core) |

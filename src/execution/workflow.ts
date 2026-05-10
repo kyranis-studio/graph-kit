@@ -19,12 +19,15 @@ export class WorkflowImpl implements Workflow {
   private logger: ExecutionLogger;
   private stepCount = 0;
 
+  private maxSteps: number;
+
   constructor(
     graph: Graph,
     config: {
       startNode: string;
       endNode: string;
       onStateUpdate?: (state: GraphState) => void;
+      maxSteps?: number;
       verbose?: boolean;
       logLevel?: LogLevel;
     },
@@ -33,6 +36,7 @@ export class WorkflowImpl implements Workflow {
     this.startNode = config.startNode;
     this.endNode = config.endNode;
     this.onStateUpdate = config.onStateUpdate;
+    this.maxSteps = config.maxSteps ?? 100;
 
     let level: LogLevel = "minimal";
     if (config.logLevel) {
@@ -90,7 +94,6 @@ export class WorkflowImpl implements Workflow {
       messages: [],
     };
     let currentNodeId = this.startNode;
-    const visited = new Set<string>();
     this.stepCount = 0;
 
     this.logger.printHeader("WORKFLOW", 0, {
@@ -101,11 +104,12 @@ export class WorkflowImpl implements Workflow {
     const offStream = this.attachStreamHandler();
 
     while (currentNodeId !== this.endNode) {
-      if (visited.has(currentNodeId)) {
-        throw new Error(`Cycle detected at ${currentNodeId}`);
-      }
-      visited.add(currentNodeId);
       this.stepCount++;
+      if (this.stepCount > this.maxSteps) {
+        throw new Error(
+          `Max steps (${this.maxSteps}) exceeded at ${currentNodeId}. Check for infinite loops.`,
+        );
+      }
 
       const node = this.graph.getNode(currentNodeId);
       if (!node) throw new Error(`Node ${currentNodeId} not found`);

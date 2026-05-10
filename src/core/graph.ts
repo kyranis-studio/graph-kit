@@ -190,6 +190,7 @@ export class GraphImpl implements Graph {
     startNode: string;
     endNode: string;
     onStateUpdate?: (state: GraphState) => void;
+    maxSteps?: number;
     verbose?: boolean;
     logLevel?: LogLevel;
   }): Workflow {

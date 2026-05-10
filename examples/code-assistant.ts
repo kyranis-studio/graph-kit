@@ -3,12 +3,15 @@
 // Use with extreme care and only in environments where you fully trust both
 // the LLM model and the code it may write or run. Run at your own risk.
 
+import { loadEnv } from "../src/utils/dotenv.ts";
 import {
   GraphKit,
   registerInteractiveChatNode,
   DebugExecutionEngine,
 } from "../mod.ts";
 import type { ToolDefinition } from "../ai/providers/types.ts";
+
+await loadEnv();
 
 interface InteractiveTool {
   definition: ToolDefinition;
@@ -177,9 +180,7 @@ console.warn(
 console.warn(
   "\x1b[33m both the LLM model and the code it may write or run. Run at your own risk.\x1b[0m",
 );
-console.warn(
-  "\x1b[43m\x1b[30m WARNING \x1b[0m\x1b[33m \x1b[0m\n",
-);
+console.warn("\x1b[43m\x1b[30m WARNING \x1b[0m\x1b[33m \x1b[0m\n");
 
 const graph = GraphKit.createGraph({ name: "Code Assistant" });
 registerInteractiveChatNode(graph);

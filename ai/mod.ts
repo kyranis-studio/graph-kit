@@ -4,6 +4,20 @@ import { getOpenAIChatNodeType } from './nodes/openai-chat.ts';
 import { getOpenRouterChatNodeType } from './nodes/openrouter-chat.ts';
 import { getAIEmbeddingNodeType } from './nodes/ai-embedding.ts';
 import { getInteractiveChatNodeType } from './nodes/interactive-chat.ts';
+import { createOllamaProvider } from './providers/ollama.ts';
+import { createOpenAIProvider } from './providers/openai.ts';
+import { createOpenRouterProvider } from './providers/openrouter.ts';
+import type {
+  ChatMessage,
+  ChatRequest,
+  ChatResponse,
+  StreamChunk,
+  ToolDefinition,
+  ToolCall,
+  AIProvider,
+  FunctionDefinition,
+} from './providers/types.ts';
+import type { InteractiveTool } from './nodes/interactive-chat.ts';
 
 export function registerOllamaNodes(graph: Graph): void {
   graph.registerNodeType('ollama-chat', getOllamaChatNodeType());
@@ -24,3 +38,21 @@ export function registerEmbeddingNodes(graph: Graph): void {
 export function registerInteractiveChatNode(graph: Graph): void {
   graph.registerNodeType('interactive-chat', getInteractiveChatNodeType());
 }
+
+export {
+  createOllamaProvider,
+  createOpenAIProvider,
+  createOpenRouterProvider,
+};
+
+export type {
+  ChatMessage,
+  ChatRequest,
+  ChatResponse,
+  StreamChunk,
+  ToolDefinition,
+  ToolCall,
+  AIProvider,
+  FunctionDefinition,
+  InteractiveTool,
+};

@@ -2,7 +2,7 @@
   <h1>🟩 GraphKit</h1>
   <p><strong>A lightweight, AI-first node graph execution library for Deno 2</strong></p>
 
-[![Version: 0.1.1](https://img.shields.io/badge/Version-0.1.1-orange.svg)](#)
+[![Version: 0.1.2](https://img.shields.io/badge/Version-0.1.2-orange.svg)](#)
 [![Deno](https://img.shields.io/badge/Deno-2.0-black?logo=deno)](https://deno.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
@@ -274,7 +274,7 @@ DeepSeek or Claude). You can capture these via graph events or using the
 graph.on("llmStreamChunk", (data: unknown) => {
   const { state } = data as { nodeId: string; state: { done: boolean } };
   if (state.done) {
-    console.log("\n[stream complete]");
+    console.log("\n\n[stream complete]");
   }
 });
 ```
@@ -350,10 +350,10 @@ if (response.message.tool_calls) {
 
 ### Interactive Terminal Chat
 
-The `interactive-chat` node provides a terminal-based REPL for multi-turn
-conversations with an LLM directly in your graph. It maintains conversation
-history, supports real-time streaming, and works with both the standard
-execution engine and the `DebugExecutionEngine`.
+The `interactive-chat` node provides a dual-mode terminal chat node: it runs as
+an **interactive REPL** (reading from stdin) or as a **workflow node** (receiving
+`userMessage` via edges from other nodes). It supports multiple AI providers
+with streaming, tool-calling, and session-persisted conversation history.
 
 ```typescript
 import {
@@ -365,9 +365,10 @@ import {
 const graph = GraphKit.createGraph({ name: "Terminal Chat" });
 registerInteractiveChatNode(graph);
 
-graph.addNode("interactive-chat", {
+const chatNode = graph.addNode("interactive-chat", {
   metadata: { label: "Chat Session" },
   data: {
+    provider: "ollama",
     model: "llama3.2",
     temperature: 0.7,
     streaming: true,
@@ -387,13 +388,17 @@ console.log(`Tokens used: ${result.values.get(`${chatNode.id}.tokenCount`)}`);
 
 | Input | Type | Default | Description |
 |-------|------|---------|-------------|
-| `model` | `string` | `"llama3"` | Ollama model name |
+| `provider` | `string` | `"ollama"` | AI provider: `"ollama"`, `"openai"`, or `"openrouter"` |
+| `model` | `string` | `"llama3"` | Model name for the selected provider |
 | `systemPrompt` | `string` | — | System prompt for the conversation |
 | `temperature` | `number` | `0.7` | LLM temperature |
 | `streaming` | `boolean` | `true` | Enable real-time streaming output |
-| `initialPrompt` | `string` | — | First message to auto-send |
-| `baseUrl` | `string` | — | Custom Ollama base URL |
-| `tools` | `InteractiveTool[]` | — | Array of tool definitions and handlers for tool-calling |
+| `userMessage` | `string` | — | When provided (via edge), runs in **workflow mode** — single-turn send + response. When absent, runs in **interactive REPL mode** |
+| `initialPrompt` | `string` | — | First message to auto-send in REPL mode |
+| `apiKey` | `string` | — | API key for OpenAI or OpenRouter providers |
+| `baseUrl` | `string` | — | Custom base URL for the provider |
+| `tools` | `InteractiveTool[]` | — | Tool definitions and handlers for tool-calling |
+| `sessionId` | `string` | node ID | Session key for persisting conversation history |
 
 | Output | Type | Description |
 |--------|------|-------------|
@@ -401,13 +406,29 @@ console.log(`Tokens used: ${result.values.get(`${chatNode.id}.tokenCount`)}`);
 | `conversation` | `array` | Full conversation history (user + assistant) |
 | `tokenCount` | `number` | Total tokens used |
 
-During execution, the node displays an interactive prompt (`▸ You:`) and streams
-the AI response in real-time. Type `exit`, `quit`, or `q` to end the session.
+**Dual mode behavior:**
 
-When `tools` are provided, streaming is automatically disabled and the node runs
-a tool-calling loop: the model may request tool invocations, results are fed
-back, and the loop continues until a text response is returned (max 10
-iterations per user turn).
+- **Workflow mode** (`userMessage` provided via edge): Sends the message to the
+  LLM, handles tool-calling loops if tools are configured, captures streaming
+  output, and returns the final response. No terminal interaction occurs. Use
+  this in graph pipelines where upstream nodes feed data to the chat node.
+- **Interactive REPL mode** (no `userMessage`): Enters a terminal read-eval-print
+  loop that reads from stdin. Supports `initialPrompt` (auto-fires on the first
+  turn), `exit`/`quit`/`q` to end, and displays tool calls inline with results.
+
+In REPL mode, the node displays an interactive prompt (`▸ You:`) and streams
+the AI response in real-time. When `tools` are provided, streaming is
+automatically disabled and the node runs a tool-calling loop: the model may
+request tool invocations, results are fed back, and the loop continues until a
+text response is returned (max 10 iterations per user turn).
+
+**Session persistence:**
+
+Conversation history is stored in the graph state under the key
+`__interactive_chat_{sessionId}`. This allows multi-turn conversations to
+persist across workflow cycles (e.g., in a loop that routes back to the same
+node). Each node can have its own `sessionId` or share one with other nodes for
+shared context.
 
 #### Code Assistant Example
 
@@ -491,17 +512,20 @@ To connect to cloud providers via OpenRouter, use `registerOpenRouterNodes`.
 Ensure you load your environment variables so the API keys are accessible.
 
 ```typescript
+import { loadEnv } from "jsr:@kyranis-studio/graph-kit/load-env";
 import {
   GraphKit,
   registerOpenRouterNodes,
 } from "jsr:@kyranis-studio/graph-kit";
+
+await loadEnv();
 
 const graph = GraphKit.createGraph({ name: "OpenRouter AI" });
 registerOpenRouterNodes(graph);
 
 const aiNode = graph.addNode("openrouter-chat", {
   data: {
-    model: "anthropic/claude-3-haiku",
+    model: "openrouter/free",
     prompt: "What is the capital of France?",
     temperature: 0.7,
   },
@@ -583,9 +607,10 @@ digraph G {
 ### Node Registration Functions
 
 - `registerInteractiveChatNode(graph)` - Registers the `interactive-chat` node
-  type for terminal-based multi-turn LLM conversations. Supports tool-calling
-  via a `tools` data field (array of `InteractiveTool` objects containing a
-  `ToolDefinition` and an `execute` handler).
+  type for LLM conversations. Supports two modes: **interactive REPL** (reads
+  from stdin) and **workflow mode** (receives `userMessage` via edges).
+  Supports multiple providers (`ollama`, `openai`, `openrouter`), tool-calling,
+  streaming, and session-persisted conversation history.
 
 ### `Graph`
 

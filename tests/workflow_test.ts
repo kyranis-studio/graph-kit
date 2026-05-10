@@ -70,7 +70,7 @@ Deno.test('Workflow with conditional edges', async () => {
   assertEquals(result.values.get('router.output'), 42);
 });
 
-Deno.test('Workflow throws on cycle', async () => {
+Deno.test('Workflow throws on max steps exceeded', async () => {
   const graph = GraphKit.createGraph();
 
   graph.registerNodeType('pass', {
@@ -88,6 +88,7 @@ Deno.test('Workflow throws on cycle', async () => {
   const workflow = graph.createWorkflow({
     startNode: 'n1',
     endNode: 'end',
+    maxSteps: 3,
   });
 
   graph.addNode('pass', { id: 'n1' });
@@ -103,7 +104,7 @@ Deno.test('Workflow throws on cycle', async () => {
       await workflow.run();
     },
     Error,
-    'Cycle detected',
+    'Max steps',
   );
 });
 

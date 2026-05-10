@@ -4,7 +4,8 @@
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",
-    "./ai": "./ai/mod.ts"
+    "./ai": "./ai/mod.ts",
+    "./load-env": "./src/utils/dotenv.ts"
   },
   "compilerOptions": {
     "strict": true,
