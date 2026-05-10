@@ -230,6 +230,55 @@ const debugEngine = new DebugExecutionEngine({
 const result = await debugEngine.execute(graph);
 ```
 
+### Custom Node Logging
+
+Custom nodes receive an `ExecutionContext` as the second argument to their
+`execute` function, which provides access to the graph's logger. The logger
+supports multiple levels (`info`, `debug`, `success`, `warn`, `error`) and a
+`printDebug` method for key-value pairs. To see log output, use the
+`ExecutionEngine` with `logLevel: "verbose"`.
+
+```typescript
+import { GraphKit, ExecutionEngine } from "jsr:@kyranis-studio/graph-kit";
+import type { ExecutionContext } from "jsr:@kyranis-studio/graph-kit";
+
+const graph = GraphKit.createGraph({ name: "Custom Node Logging" });
+
+graph.registerNodeType("data-processor", {
+  inputs: [
+    { id: "data", name: "Data", type: "string", required: true },
+  ],
+  outputs: [
+    { id: "result", name: "Result", type: "string" },
+  ],
+  execute: async (inputs: any, ctx: ExecutionContext) => {
+    const { logger } = ctx;
+
+    logger?.info("starting data processing");
+    logger?.printDebug("input_length", inputs.data.length);
+
+    const steps = ["parsing", "validating", "transforming", "finalizing"];
+    for (const step of steps) {
+      logger?.debug(`step: ${step}`);
+    }
+
+    const result = `processed: ${inputs.data.toUpperCase()}`;
+    logger?.printDebug("output_length", result.length);
+    logger?.success("processing complete");
+
+    return { result };
+  },
+});
+
+const node = graph.addNode("data-processor", {
+  data: { data: "hello world from graph-kit" },
+});
+
+const engine = new ExecutionEngine({ logLevel: "verbose" });
+const state = await engine.execute(graph);
+console.log(`\nResult: ${state.values.get(`${node.id}.result`)}`);
+```
+
 ---
 
 ## 🤖 AI Integration

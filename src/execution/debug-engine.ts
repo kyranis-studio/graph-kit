@@ -175,6 +175,7 @@ export class DebugExecutionEngine {
           nodeId,
           state,
           config: node.data,
+          logger: this.logger,
         };
         const middlewares = (graph as any).getMiddlewares?.() || [];
         await this.runWithMiddlewares(

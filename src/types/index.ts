@@ -54,6 +54,7 @@ export interface ExecutionContext {
   nodeId: string;
   state: GraphState;
   config?: Record<string, unknown>;
+  logger?: NodeLogger;
 }
 
 export type NodeExecutor<TInput = unknown, TOutput = unknown> = (
@@ -168,3 +169,12 @@ export interface GraphConfig {
 }
 
 export type LogLevel = 'silent' | 'muted' | 'minimal' | 'verbose';
+
+export interface NodeLogger {
+  info(text: string): void;
+  warn(text: string): void;
+  error(text: string): void;
+  success(text: string): void;
+  debug(text: string): void;
+  printDebug(key: string, value: unknown): void;
+}

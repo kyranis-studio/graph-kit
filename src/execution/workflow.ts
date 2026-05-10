@@ -141,6 +141,7 @@ export class WorkflowImpl implements Workflow {
         nodeId: currentNodeId,
         state,
         config: node.data,
+        logger: this.logger,
       })) as Record<string, unknown>;
 
       const duration = performance.now() - startTime;

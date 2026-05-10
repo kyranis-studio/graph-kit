@@ -13,33 +13,38 @@ interface InteractiveTool {
   execute: (args: Record<string, unknown>) => Promise<string> | string;
 }
 
-let sharedState: ExecutionContext["state"] | null = null;
-
-function displayTodoList(state: ExecutionContext["state"]) {
-  const todos = (state.values.get("__todo_items") as string[]) || [];
-  const statuses = (state.values.get("__todo_statuses") as string[]) || [];
-
-  console.log("\n  \x1b[1m\u25a0 Current Progress:\x1b[0m");
-  for (let i = 0; i < todos.length; i++) {
-    const status = statuses[i] || "pending";
-    let icon: string;
-    let color: string;
-    if (status === "done") {
-      icon = "\u2713";
-      color = "\x1b[32m";
-    } else if (status === "in-progress") {
-      icon = "\u25b6";
-      color = "\x1b[33m";
-    } else {
-      icon = "\u25cb";
-      color = "\x1b[90m";
-    }
-    console.log(`  ${color}${icon}\x1b[0m Step ${i + 1}: ${todos[i]}`);
-  }
-  console.log();
+interface SharedMemory {
+  originalPrompt: string;
+  todos: string[];
+  statuses: string[];
+  results: string[];
 }
 
+// ── Tools ────────────────────────────────────────────────────────────
 const tools: InteractiveTool[] = [
+  {
+    definition: {
+      type: "function",
+      function: {
+        name: "read_file",
+        description: "Read the contents of a file",
+        parameters: {
+          type: "object",
+          properties: {
+            path: { type: "string", description: "Absolute path to the file" },
+          },
+          required: ["path"],
+        },
+      },
+    },
+    execute: async (args) => {
+      try {
+        return await Deno.readTextFile(args.path as string);
+      } catch (e) {
+        return `[error] ${(e as Error).message}`;
+      }
+    },
+  },
   {
     definition: {
       type: "function",
@@ -60,6 +65,61 @@ const tools: InteractiveTool[] = [
       try {
         await Deno.writeTextFile(args.path as string, args.content as string);
         return `[ok] wrote ${(args.content as string).length} bytes to ${args.path}`;
+      } catch (e) {
+        return `[error] ${(e as Error).message}`;
+      }
+    },
+  },
+  {
+    definition: {
+      type: "function",
+      function: {
+        name: "create_directory",
+        description: "Create a directory (including parent directories)",
+        parameters: {
+          type: "object",
+          properties: {
+            path: { type: "string", description: "Directory path to create" },
+          },
+          required: ["path"],
+        },
+      },
+    },
+    execute: async (args) => {
+      try {
+        await Deno.mkdir(args.path as string, { recursive: true });
+        return `[ok] created directory ${args.path}`;
+      } catch (e) {
+        return `[error] ${(e as Error).message}`;
+      }
+    },
+  },
+  {
+    definition: {
+      type: "function",
+      function: {
+        name: "list_files",
+        description: "List files in a directory",
+        parameters: {
+          type: "object",
+          properties: {
+            path: {
+              type: "string",
+              description: "Directory path (default: current)",
+            },
+          },
+          required: [],
+        },
+      },
+    },
+    execute: async (args) => {
+      try {
+        const dir = (args.path as string) || ".";
+        const entries: string[] = [];
+        for await (const entry of Deno.readDir(dir)) {
+          entries.push(entry.name + (entry.isDirectory ? "/" : ""));
+        }
+        return entries.join("\n") || "(empty directory)";
       } catch (e) {
         return `[error] ${(e as Error).message}`;
       }
@@ -104,52 +164,35 @@ const tools: InteractiveTool[] = [
     definition: {
       type: "function",
       function: {
-        name: "mark_step_done",
-        description:
-          "Call this AFTER you have executed and verified a step. Marks the step as completed in the shared todo list.",
+        name: "grep_search",
+        description: "Search for a regex pattern in files",
         parameters: {
           type: "object",
           properties: {
-            stepNumber: {
-              type: "number",
-              description: "The 1-based step number you just completed",
-            },
-            result: {
-              type: "string",
-              description: "Summary of what was done and verification result",
-            },
+            pattern: { type: "string", description: "Regex pattern" },
+            glob: { type: "string", description: "File glob filter e.g. *.ts" },
           },
-          required: ["stepNumber", "result"],
+          required: ["pattern"],
         },
       },
     },
     execute: async (args) => {
-      if (!sharedState) return "[error] no state reference";
-      const stepNum = args.stepNumber as number;
-      const result = args.result as string;
-      const idx = stepNum - 1;
-      const statuses =
-        (sharedState.values.get("__todo_statuses") as string[]) || [];
-      const results =
-        (sharedState.values.get("__todo_results") as string[]) || [];
-
-      if (idx >= 0 && idx < statuses.length && statuses[idx] !== "done") {
-        statuses[idx] = "done";
-        results[idx] = result;
-        sharedState.values.set("__todo_statuses", statuses);
-        sharedState.values.set("__todo_results", results);
-
-        displayTodoList(sharedState);
-
-        return `[ok] Step ${stepNum} marked as done.`;
+      try {
+        const rgArgs = ["--no-heading", "--color", "never"];
+        if (args.glob) rgArgs.push("--glob", args.glob as string);
+        rgArgs.push(args.pattern as string);
+        const cmd = new Deno.Command("rg", { args: rgArgs });
+        const out = await cmd.output();
+        return new TextDecoder().decode(out.stdout).trim() || "(no matches)";
+      } catch (e) {
+        return `[error] ${(e as Error).message}`;
       }
-      return `[skip] Step ${stepNum} already done or invalid.`;
     },
   },
 ];
 
 console.warn(
-  "\x1b[43m\x1b[30m WARNING \x1b[0m\x1b[33m This is an educational example — not a production-ready assistant.\x1b[0m",
+  "\x1b[43m\x1b[30m WARNING \x1b[0m\x1b[33m This is an educational example \u2014 not a production-ready assistant.\x1b[0m",
 );
 console.warn(
   "\x1b[33m The tools can read, write, and execute arbitrary files and commands.\x1b[0m",
@@ -158,10 +201,10 @@ console.warn("\x1b[43m\x1b[30m WARNING \x1b[0m\n");
 
 await loadEnv();
 
-const graph = GraphKit.createGraph({ name: "Todo Agent Workflow" });
-
+const graph = GraphKit.createGraph({ name: "Code Assistant Workflow" });
 registerInteractiveChatNode(graph);
 
+// ── Custom Node: user-prompt ─────────────────────────────────────────
 graph.registerNodeType("user-prompt", {
   inputs: [],
   outputs: [
@@ -172,13 +215,12 @@ graph.registerNodeType("user-prompt", {
     const input = prompt("  \x1b[36m\u25b8 Task:\x1b[0m ")?.trim() ?? "";
     const isDone =
       !input || ["exit", "quit", "q"].includes(input.toLowerCase());
-    if (isDone) {
-      console.log("\n  \x1b[33mSession ended.\x1b[0m");
-    }
+    if (isDone) console.log("\n  \x1b[33mSession ended.\x1b[0m");
     return { text: isDone ? "" : input, hasInput: !isDone };
   },
 });
 
+// ── Custom Node: parse-todos ─────────────────────────────────────────
 graph.registerNodeType("parse-todos", {
   inputs: [
     {
@@ -188,7 +230,7 @@ graph.registerNodeType("parse-todos", {
     },
   ],
   outputs: [
-    { id: "currentTodo", name: "Current Todo", type: "string" },
+    { id: "todos", name: "Todos", type: "any" },
     { id: "hasTodos", name: "Has Todos", type: "boolean" },
   ],
   execute: async (inputs: any, context: ExecutionContext) => {
@@ -197,113 +239,175 @@ graph.registerNodeType("parse-todos", {
     const todos: string[] = [];
     for (const line of lines) {
       const match = line.match(/^[\d\.\)\-\*\s]+(.+)/);
-      if (match && match[1].trim() && !line.toLowerCase().includes("plan")) {
+      if (match && match[1].trim()) {
         todos.push(match[1].trim());
       }
     }
-    context.state.values.set("__todo_items", todos);
-    context.state.values.set("__todo_results", []);
-    context.state.values.set(
-      "__todo_statuses",
-      todos.map(() => "pending"),
-    );
-    context.state.values.set("process-result.done", false);
-    return {
-      currentTodo: todos[0] || "",
-      hasTodos: todos.length > 0,
-    };
+    context.logger?.info(`plan created: ${todos.length} steps`);
+    return { todos, hasTodos: todos.length > 0 };
   },
 });
 
-graph.registerNodeType("compose-plan", {
-  inputs: [{ id: "trigger", name: "Trigger", type: "any" }],
-  outputs: [{ id: "plan", name: "Plan", type: "string" }],
-  execute: async (_inputs: any, context: ExecutionContext) => {
-    sharedState = context.state;
+// ── Custom Node: shared-memory ───────────────────────────────────────
+graph.registerNodeType("shared-memory", {
+  inputs: [
+    { id: "initPrompt", name: "Init Prompt", type: "string" },
+    { id: "initTodos", name: "Init Todos", type: "any" },
+    { id: "markStepResult", name: "Mark Step Result", type: "string" },
+  ],
+  outputs: [
+    { id: "currentTodo", name: "Current Todo", type: "string" },
+    { id: "currentStepNum", name: "Current Step Number", type: "number" },
+    { id: "allDone", name: "All Done", type: "boolean" },
+    { id: "hasTodos", name: "Has Todos", type: "boolean" },
+  ],
+  execute: async (inputs: any, context: ExecutionContext) => {
+    const state = context.state;
 
-    const todos = (context.state.values.get("__todo_items") as string[]) || [];
-    const statuses =
-      (context.state.values.get("__todo_statuses") as string[]) || [];
-    const results =
-      (context.state.values.get("__todo_results") as string[]) || [];
-    const orchResponse =
-      (context.state.values.get("orchestrator.response") as string) || "";
+    let memory = state.values.get("shared_memory") as SharedMemory | undefined;
 
-    const hasActive = statuses.includes("in-progress");
-    if (!hasActive) {
-      const firstPending = statuses.indexOf("pending");
-      if (firstPending !== -1) {
-        statuses[firstPending] = "in-progress";
-        context.state.values.set("__todo_statuses", statuses);
-      }
+    if (inputs.initTodos && (!memory || memory.todos.length === 0)) {
+      memory = {
+        originalPrompt: (inputs.initPrompt as string) || "",
+        todos: structuredClone(inputs.initTodos) as string[],
+        statuses: inputs.initTodos.map(() => "pending"),
+        results: inputs.initTodos.map(() => ""),
+      };
+      if (memory.todos.length > 0) memory.statuses[0] = "in-progress";
+      state.values.set("shared_memory", memory);
     }
 
-    const parts: string[] = [];
-    parts.push(`## ORIGINAL PLAN\n${orchResponse}\n`);
-    parts.push(`## PROGRESS REPORT`);
-    for (let i = 0; i < todos.length; i++) {
-      const status = statuses[i] || "pending";
-      const icon =
-        status === "done"
-          ? "[COMPLETED]"
-          : status === "in-progress"
-            ? "[ACTIVE]"
-            : "[PENDING]";
-      parts.push(`${icon} Step ${i + 1}: ${todos[i]}`);
-      if (status === "done" && results[i]) {
-        parts.push(`   > Result: ${results[i]}`);
-      }
+    if (!memory) {
+      memory = { originalPrompt: "", todos: [], statuses: [], results: [] };
     }
-    parts.push(
-      "\nYOUR TASK: Execute the [ACTIVE] step. Use available tools. When done, call mark_step_done and then provide a brief summary of your work.",
-    );
 
-    return { plan: parts.join("\n") };
+    const currentIdx = memory.statuses.indexOf("in-progress");
+    const currentTodo = currentIdx !== -1 ? memory.todos[currentIdx] : "";
+    const currentStepNum = currentIdx !== -1 ? currentIdx + 1 : 0;
+    const hasTodos = memory.todos.length > 0;
+    const allDone =
+      memory.todos.length > 0 && memory.statuses.every((s) => s === "done");
+
+    return { currentTodo, currentStepNum, allDone, hasTodos };
   },
 });
 
+// ── Custom Node: display-todos ───────────────────────────────────────
 graph.registerNodeType("display-todos", {
   inputs: [{ id: "trigger", name: "Trigger", type: "any" }],
   outputs: [{ id: "status", name: "Status", type: "string" }],
   execute: async (_inputs: any, context: ExecutionContext) => {
-    displayTodoList(context.state);
+    const memory = context.state.values.get("shared_memory") as SharedMemory;
+    if (!memory || memory.todos.length === 0) return { status: "ok" };
+
+    const logger = context.logger;
+    console.log("");
+
+    for (let i = 0; i < memory.todos.length; i++) {
+      const s = memory.statuses[i] || "pending";
+      if (s === "done") {
+        logger?.success(`  step ${i + 1} [DONE] ${memory.todos[i]}`);
+      } else if (s === "in-progress") {
+        logger?.info(`  step ${i + 1} [ACTIVE] ${memory.todos[i]}`);
+      } else {
+        logger?.info(`  step ${i + 1} [PENDING] ${memory.todos[i]}`);
+      }
+    }
+
+    console.log("");
     return { status: "ok" };
   },
 });
 
-graph.registerNodeType("process-result", {
-  inputs: [{ id: "agentResponse", name: "Agent Response", type: "string" }],
-  outputs: [
-    { id: "done", name: "Done", type: "boolean" },
-    { id: "summary", name: "Summary", type: "string" },
-  ],
+// ── Custom Node: compose-prompt ──────────────────────────────────────
+graph.registerNodeType("compose-prompt", {
+  inputs: [{ id: "trigger", name: "Trigger", type: "any" }],
+  outputs: [{ id: "prompt", name: "Prompt", type: "string" }],
   execute: async (_inputs: any, context: ExecutionContext) => {
-    const todos = (context.state.values.get("__todo_items") as string[]) || [];
-    const statuses =
-      (context.state.values.get("__todo_statuses") as string[]) || [];
-    const results =
-      (context.state.values.get("__todo_results") as string[]) || [];
+    const memory = context.state.values.get("shared_memory") as SharedMemory;
+    const currentIdx = memory.statuses.indexOf("in-progress");
+    const currentStep = currentIdx !== -1 ? memory.todos[currentIdx] : "";
+    const currentStepNum = currentIdx !== -1 ? currentIdx + 1 : 0;
 
-    const allDone = statuses.length > 0 && statuses.every((s) => s === "done");
-    const summary = todos
-      .map((todo, i) => {
-        const r = results[i];
-        const h = `## Step ${i + 1}: ${todo}`;
-        return r ? `${h}\n${r}` : h;
-      })
-      .join("\n\n---\n\n");
+    context.logger?.info(`--- step ${currentStepNum}: ${currentStep} ---`);
 
-    context.state.values.set("process-result.done", allDone);
-    return { done: allDone, summary };
+    return {
+      prompt: [
+        `## Original Request\n${memory.originalPrompt}`,
+        ``,
+        `## Progress`,
+        memory.statuses
+          .map((s, i) => {
+            if (s === "done") return `[DONE] Step ${i + 1}: ${memory.todos[i]}`;
+            if (s === "in-progress")
+              return `[CURRENT] Step ${i + 1}: ${memory.todos[i]}`;
+            return `[PENDING] Step ${i + 1}: ${memory.todos[i]}`;
+          })
+          .join("\n"),
+        ``,
+        `## Task`,
+        `Execute step ${currentStepNum}: ${currentStep}`,
+        `You have access to tools: read_file, write_file, create_directory, list_files, run_command, grep_search.`,
+        `Use them to complete the step. After finishing, provide a summary of what you did.`,
+      ].join("\n"),
+    };
   },
 });
 
+// ── Custom Node: mark-step-done ──────────────────────────────────────
+graph.registerNodeType("mark-step-done", {
+  inputs: [{ id: "agentResponse", name: "Agent Response", type: "string" }],
+  outputs: [
+    { id: "response", name: "Response", type: "string" },
+    { id: "summary", name: "Summary", type: "string" },
+  ],
+  execute: async (inputs: any, context: ExecutionContext) => {
+    const agentResponse = inputs.agentResponse || "";
+
+    const state = context.state;
+    const memory = state.values.get("shared_memory") as SharedMemory;
+    const currentIdx = memory.statuses.indexOf("in-progress");
+
+    if (currentIdx !== -1) {
+      memory.statuses[currentIdx] = "done";
+      memory.results[currentIdx] = agentResponse;
+      const nextPending = memory.statuses.indexOf("pending");
+      if (nextPending !== -1) memory.statuses[nextPending] = "in-progress";
+      state.values.set("shared_memory", memory);
+    }
+
+    const doneCount = memory.statuses.filter((s) => s === "done").length;
+    context.logger?.success(
+      `step ${currentIdx !== -1 ? currentIdx + 1 : "?"} complete (${doneCount}/${memory.todos.length})`,
+    );
+
+    // Print a snippet of the agent's response
+    const snippet =
+      agentResponse.length > 300
+        ? agentResponse.slice(0, 300) + "..."
+        : agentResponse;
+    context.logger?.info(`agent: ${snippet}`);
+
+    const summary = memory.todos
+      .map((todo, i) => {
+        const r = memory.results[i];
+        return r
+          ? `## Step ${i + 1}: ${todo}\n${r}`
+          : `## Step ${i + 1}: ${todo}`;
+      })
+      .join("\n\n---\n\n");
+
+    return { response: agentResponse, summary };
+  },
+});
+
+// ── Custom Node: display-summary ─────────────────────────────────────
 graph.registerNodeType("display-summary", {
   inputs: [{ id: "summary", name: "Summary", type: "string" }],
   outputs: [],
-  execute: async (inputs: any) => {
+  execute: async (inputs: any, _context: ExecutionContext) => {
     if (inputs.summary) {
-      console.log(`\n  \x1b[35m\x1b[1m\u25a0 MISSION COMPLETE\x1b[0m\n`);
+      console.log(`\n  \x1b[35m\x1b[1m\u25a0 ALL STEPS COMPLETE\x1b[0m\n`);
       console.log(inputs.summary);
       console.log("\n  " + "\x1b[90m" + "=".repeat(40) + "\x1b[0m\n");
     }
@@ -311,100 +415,133 @@ graph.registerNodeType("display-summary", {
   },
 });
 
-const orchestrator = graph.addNode("interactive-chat", {
+// ── Custom Node: silent-end ──────────────────────────────────────────
+graph.registerNodeType("silent-end", {
+  inputs: [],
+  outputs: [],
+  execute: async () => ({}),
+});
+
+// ── Add Nodes ────────────────────────────────────────────────────────
+graph.addNode("user-prompt", { id: "prompt" });
+
+graph.addNode("interactive-chat", {
   id: "orchestrator",
   metadata: { label: "Planner" },
   data: {
     provider: "ollama",
-    model: "gemma4:e2b",
+    model: "lfm2.5-thinking:latest",
     systemPrompt:
-      "You are a task planner. Break the user's request into a numbered list of small, actionable steps.\nOutput ONLY the numbered list.",
+      "You are a senior software architect. Break the user's project request into a numbered list of concrete implementation steps. Include steps for setup, file creation, configuration, and verification. Output ONLY the numbered list.",
     temperature: 0.1,
     streaming: true,
   },
 });
 
-const agent = graph.addNode("interactive-chat", {
+graph.addNode("interactive-chat", {
   id: "agent",
-  metadata: { label: "Executor" },
+  metadata: { label: "Code Agent" },
   data: {
     provider: "ollama",
     model: "gemma4:e2b",
     systemPrompt:
-      "You are a task executor. Use tools to complete the [ACTIVE] step. Always call mark_step_done when finished.",
-    temperature: 0.1,
-    streaming: true,
+      "You are a code assistant that builds projects. Use write_file to create files, create_directory for directories, run_command for shell operations, and read_file/list_files/grep_search to inspect existing code. Think step by step. Call one tool at a time. After completing all work for the step, provide a summary.",
+    temperature: 0.3,
+    streaming: false,
     tools,
   },
 });
 
-graph.addNode("user-prompt", { id: "prompt" });
 graph.addNode("parse-todos", { id: "parse-todos" });
-graph.addNode("compose-plan", { id: "compose-plan" });
-graph.addNode("process-result", { id: "process-result" });
+graph.addNode("shared-memory", { id: "memory" });
 graph.addNode("display-todos", { id: "display-todos" });
+graph.addNode("compose-prompt", { id: "compose-prompt" });
+graph.addNode("mark-step-done", { id: "mark-step-done" });
 graph.addNode("display-summary", { id: "display-summary" });
-graph.addNode("user-prompt", { id: "end" });
+graph.addNode("silent-end", { id: "end" });
 
+// ── Edges ────────────────────────────────────────────────────────────
 graph.addEdge({
   sourceNodeId: "prompt",
   sourcePortId: "text",
   targetNodeId: "orchestrator",
   targetPortId: "userMessage",
 });
+
 graph.addEdge({
   sourceNodeId: "orchestrator",
   sourcePortId: "response",
   targetNodeId: "parse-todos",
   targetPortId: "orchestratorResponse",
 });
+
+graph.addEdge({
+  sourceNodeId: "orchestrator",
+  sourcePortId: "response",
+  targetNodeId: "memory",
+  targetPortId: "initPrompt",
+});
+
 graph.addEdge({
   sourceNodeId: "parse-todos",
+  sourcePortId: "todos",
+  targetNodeId: "memory",
+  targetPortId: "initTodos",
+});
+
+graph.addEdge({
+  sourceNodeId: "memory",
   sourcePortId: "currentTodo",
   targetNodeId: "display-todos",
   targetPortId: "trigger",
 });
+
 graph.addEdge({
   sourceNodeId: "display-todos",
   sourcePortId: "status",
-  targetNodeId: "compose-plan",
+  targetNodeId: "compose-prompt",
   targetPortId: "trigger",
 });
+
 graph.addEdge({
-  sourceNodeId: "compose-plan",
-  sourcePortId: "plan",
+  sourceNodeId: "compose-prompt",
+  sourcePortId: "prompt",
   targetNodeId: "agent",
   targetPortId: "userMessage",
 });
+
 graph.addEdge({
   sourceNodeId: "agent",
   sourcePortId: "response",
-  targetNodeId: "process-result",
+  targetNodeId: "mark-step-done",
   targetPortId: "agentResponse",
 });
+
 graph.addEdge({
-  sourceNodeId: "process-result",
-  sourcePortId: "done",
-  targetNodeId: "display-todos",
-  targetPortId: "trigger",
+  sourceNodeId: "mark-step-done",
+  sourcePortId: "response",
+  targetNodeId: "memory",
+  targetPortId: "markStepResult",
 });
+
 graph.addEdge({
-  sourceNodeId: "process-result",
+  sourceNodeId: "mark-step-done",
   sourcePortId: "summary",
   targetNodeId: "display-summary",
   targetPortId: "summary",
 });
 
-console.log("\n  \x1b[1m=== TODO AGENT WORKFLOW ===\x1b[0m");
+// ── Workflow ─────────────────────────────────────────────────────────
+console.log("\n  \x1b[1m=== CODE ASSISTANT WORKFLOW ===\x1b[0m");
 console.log(
-  "  Planner breaks down tasks \u2192 Executor handles them one by one.\n",
+  "  Planner creates a plan \u2192 Agent builds each step with tools.\n",
 );
 
 const workflow = graph.createWorkflow({
   startNode: "prompt",
   endNode: "end",
-  maxSteps: 50,
-  logLevel: "minimal",
+  maxSteps: 100,
+  logLevel: "verbose",
 });
 
 workflow.addConditionalEdge({
@@ -414,16 +551,20 @@ workflow.addConditionalEdge({
 });
 
 workflow.addConditionalEdge({
-  sourceNodeId: "display-todos",
-  condition: (state) =>
-    state.values.get("process-result.done")
+  sourceNodeId: "memory",
+  condition: (state) => {
+    const memory = state.values.get("shared_memory") as
+      | SharedMemory
+      | undefined;
+    return memory && memory.statuses.every((s) => s === "done")
       ? "display-summary"
-      : "compose-plan",
+      : "display-todos";
+  },
 });
 
 workflow.addConditionalEdge({
   sourceNodeId: "display-summary",
-  condition: () => "prompt",
+  condition: () => "end",
 });
 
 await workflow.run();
