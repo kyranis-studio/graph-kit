@@ -401,6 +401,91 @@ html, body {
   color: var(--accent);
 }
 
+/* Node input fields */
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.input-label {
+  min-width: 80px;
+  flex-shrink: 0;
+  font-size: 11px;
+}
+
+.node-input-field {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 11px;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.node-input-field:focus {
+  border-color: var(--accent);
+}
+
+.node-input-field::placeholder {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.node-input-textarea {
+  min-height: 52px;
+  resize: vertical;
+  line-height: 1.4;
+}
+
+.node-input-select {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 11px;
+  color: var(--text-primary);
+  outline: none;
+  cursor: pointer;
+}
+
+.node-input-select:focus {
+  border-color: var(--accent);
+}
+
+.input-section-header {
+  margin-bottom: 6px;
+}
+
+.input-btn-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.input-apply-btn {
+  flex: 1;
+  text-align: center;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+}
+
+.input-apply-btn:hover {
+  background: var(--accent-hover);
+}
+
+.input-clear-btn {
+  text-align: center;
+}
+
 /* Toast */
 .toast {
   position: fixed;

@@ -88,11 +88,22 @@ export interface Edge {
   metadata?: EdgeMetadata;
 }
 
+export interface WorkflowConfig {
+  startNode: string;
+  endNode: string;
+  conditionalEdges: Array<{
+    sourceNodeId: string;
+    conditionLabel?: string;
+  }>;
+  maxSteps?: number;
+}
+
 export interface Graph {
   id: string;
   nodes: Map<string, Node>;
   edges: Map<string, Edge>;
   metadata?: GraphMetadata;
+  workflowConfig?: WorkflowConfig;
 
   registerNodeType(type: string, definition: NodeTypeDefinition): void;
 
@@ -133,6 +144,8 @@ export interface Graph {
     logLevel?: LogLevel;
   }): Workflow;
 
+  setWorkflowConfig(config: WorkflowConfig): void;
+
   use(
     middleware: (
       context: ExecutionContext,
@@ -158,6 +171,7 @@ export interface Workflow {
   addConditionalEdge(config: {
     sourceNodeId: string;
     condition: (state: GraphState) => string;
+    conditionLabel?: string;
   }): void;
   run(initialState?: GraphState): Promise<GraphState>;
 }

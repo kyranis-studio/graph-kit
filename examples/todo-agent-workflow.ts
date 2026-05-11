@@ -546,12 +546,14 @@ const workflow = graph.createWorkflow({
 
 workflow.addConditionalEdge({
   sourceNodeId: "prompt",
+  conditionLabel: "hasInput ? orchestrator : end",
   condition: (state) =>
     state.values.get("prompt.hasInput") ? "orchestrator" : "end",
 });
 
 workflow.addConditionalEdge({
   sourceNodeId: "memory",
+  conditionLabel: "allDone ? display-summary : display-todos",
   condition: (state) => {
     const memory = state.values.get("shared_memory") as
       | SharedMemory
@@ -564,6 +566,7 @@ workflow.addConditionalEdge({
 
 workflow.addConditionalEdge({
   sourceNodeId: "display-summary",
+  conditionLabel: "→ end",
   condition: () => "end",
 });
 

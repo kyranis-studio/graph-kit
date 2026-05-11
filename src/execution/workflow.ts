@@ -5,6 +5,7 @@ import type {
   Node,
   LogLevel,
 } from "../types/index.ts";
+import type { GraphImpl } from "../core/graph.ts";
 import { ExecutionLogger } from "./log-engine.ts";
 
 export class WorkflowImpl implements Workflow {
@@ -84,8 +85,35 @@ export class WorkflowImpl implements Workflow {
   addConditionalEdge(config: {
     sourceNodeId: string;
     condition: (state: GraphState) => string;
+    conditionLabel?: string;
   }): void {
     this.conditionalEdges.push(config);
+
+    const g = this.graph as GraphImpl;
+    if (!g.workflowConditionFunctions) {
+      g.workflowConditionFunctions = new Map();
+    }
+    g.workflowConditionFunctions.set(
+      config.sourceNodeId,
+      config.condition,
+    );
+
+    if (this.graph.workflowConfig) {
+      const existing = this.graph.workflowConfig.conditionalEdges.findIndex(
+        (e) => e.sourceNodeId === config.sourceNodeId,
+      );
+      if (existing !== -1) {
+        this.graph.workflowConfig.conditionalEdges[existing] = {
+          sourceNodeId: config.sourceNodeId,
+          conditionLabel: config.conditionLabel,
+        };
+      } else {
+        this.graph.workflowConfig.conditionalEdges.push({
+          sourceNodeId: config.sourceNodeId,
+          conditionLabel: config.conditionLabel,
+        });
+      }
+    }
   }
 
   async run(initialState?: GraphState): Promise<GraphState> {

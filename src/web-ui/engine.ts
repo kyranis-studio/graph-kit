@@ -2,8 +2,10 @@ import type {
   Graph,
   GraphState,
   ExecutionContext,
+  WorkflowConfig,
 } from "../types/index.ts";
 import { topologicalSort } from "../algorithms/sorting.ts";
+import type { GraphImpl } from "../core/graph.ts";
 
 export interface WebUIConfig {
   port?: number;
@@ -14,7 +16,10 @@ interface NodeDef {
   id: string;
   type: string;
   label?: string;
-  inputs: Array<{ id: string; name: string; type: string }>;
+  isStartNode?: boolean;
+  isEndNode?: boolean;
+  data?: Record<string, unknown>;
+  inputs: Array<{ id: string; name: string; type: string; required?: boolean }>;
   outputs: Array<{ id: string; name: string; type: string }>;
 }
 
@@ -24,6 +29,21 @@ interface EdgeDef {
   sourcePortId: string;
   targetNodeId: string;
   targetPortId: string;
+}
+
+interface GroupDef {
+  id: string;
+  label: string;
+  nodeIds: string[];
+}
+
+interface WorkflowDef {
+  startNode: string;
+  endNode: string;
+  conditionalEdges: Array<{
+    sourceNodeId: string;
+    conditionLabel?: string;
+  }>;
 }
 
 const PUBLIC_DIR = new URL("./public/", import.meta.url);
@@ -45,6 +65,7 @@ export class WebUIExecutionEngine {
   private resolveExecution!: (state: GraphState) => void;
   private executionPromise!: Promise<GraphState>;
   private controller: AbortController | null = null;
+  private nodeInputOverrides: Map<string, Record<string, unknown>> = new Map();
 
   constructor(config?: WebUIConfig) {
     this.port = config?.port ?? 3000;
@@ -63,18 +84,31 @@ export class WebUIExecutionEngine {
 
   private buildGraphDef(
     graph: Graph,
-  ): { nodes: NodeDef[]; edges: EdgeDef[]; metadata?: Record<string, unknown> } {
+  ): {
+    nodes: NodeDef[];
+    edges: EdgeDef[];
+    groups?: GroupDef[];
+    workflow?: WorkflowDef;
+    metadata?: Record<string, unknown>;
+  } {
     const nodes: NodeDef[] = [];
     const edges: EdgeDef[] = [];
+    const wc = graph.workflowConfig;
+    const allNodeIds = Array.from(graph.nodes.keys());
+
     for (const node of graph.nodes.values()) {
       nodes.push({
         id: node.id,
         type: node.type,
         label: node.metadata?.label,
+        isStartNode: wc?.startNode === node.id,
+        isEndNode: wc?.endNode === node.id,
+        data: node.data,
         inputs: Array.from(node.inputs.values()).map((p) => ({
           id: p.id,
           name: p.name,
           type: p.type,
+          required: p.required,
         })),
         outputs: Array.from(node.outputs.values()).map((p) => ({
           id: p.id,
@@ -92,7 +126,37 @@ export class WebUIExecutionEngine {
         targetPortId: edge.targetPortId,
       });
     }
-    return { nodes, edges, metadata: (graph as unknown as Record<string, unknown>).metadata as Record<string, unknown> | undefined };
+
+    const result: {
+      nodes: NodeDef[];
+      edges: EdgeDef[];
+      groups?: GroupDef[];
+      workflow?: WorkflowDef;
+      metadata?: Record<string, unknown>;
+    } = {
+      nodes,
+      edges,
+      metadata: (graph as unknown as Record<string, unknown>).metadata as Record<string, unknown> | undefined,
+    };
+
+    if (wc) {
+      result.workflow = {
+        startNode: wc.startNode,
+        endNode: wc.endNode,
+        conditionalEdges: wc.conditionalEdges,
+      };
+      result.groups = [
+        {
+          id: "workflow",
+          label: graph.metadata?.name
+            ? `Workflow: ${graph.metadata.name}`
+            : "Workflow",
+          nodeIds: allNodeIds,
+        },
+      ];
+    }
+
+    return result;
   }
 
   async execute(graph: Graph, initialState?: GraphState): Promise<GraphState> {
@@ -147,6 +211,26 @@ export class WebUIExecutionEngine {
         if (req.method === "POST" && path === "/api/toggle-debug") {
           this.debugMode = !this.debugMode;
           return Response.json({ debugMode: this.debugMode });
+        }
+
+        if (req.method === "PUT" && path === "/api/node-inputs") {
+          const body = await req.json() as {
+            nodeId: string;
+            inputs: Record<string, unknown>;
+          };
+          if (body.nodeId && body.inputs) {
+            this.nodeInputOverrides.set(body.nodeId, body.inputs);
+            return Response.json({ status: "ok" });
+          }
+          return Response.json({ status: "error", error: "missing nodeId or inputs" }, { status: 400 });
+        }
+
+        if (req.method === "GET" && path === "/api/node-inputs") {
+          const overrides: Record<string, Record<string, unknown>> = {};
+          for (const [nodeId, inputs] of this.nodeInputOverrides) {
+            overrides[nodeId] = inputs;
+          }
+          return Response.json(overrides);
         }
 
         if (path === "/api/events") {
@@ -226,6 +310,171 @@ export class WebUIExecutionEngine {
     graph: Graph,
     initialState?: GraphState,
   ): Promise<void> {
+    const wc = graph.workflowConfig;
+
+    if (wc) {
+      await this.runWorkflowExecution(graph, wc, initialState);
+    } else {
+      await this.runLinearExecution(graph, initialState);
+    }
+  }
+
+  private async runWorkflowExecution(
+    graph: Graph,
+    wc: WorkflowConfig,
+    initialState?: GraphState,
+  ): Promise<void> {
+    const state: GraphState = initialState || {
+      values: new Map(),
+      messages: [],
+    };
+    const allNodeIds = Array.from(graph.nodes.keys());
+    let currentNodeId = wc.startNode;
+    let stepCount = 0;
+    const maxSteps = wc.maxSteps ?? 100;
+    const condFns = (graph as GraphImpl).workflowConditionFunctions;
+
+    this.broadcast("executionStart", {
+      totalNodes: allNodeIds.length,
+      nodeOrder: allNodeIds,
+      workflowStartNode: wc.startNode,
+      workflowEndNode: wc.endNode,
+    });
+
+    const executedNodes = new Set<string>();
+
+    while (currentNodeId !== wc.endNode) {
+      if (this.cancelled) break;
+
+      stepCount++;
+      if (stepCount > maxSteps) {
+        throw new Error(
+          `Max steps (${maxSteps}) exceeded at ${currentNodeId}. Check for infinite loops.`,
+        );
+      }
+
+      const node = graph.getNode(currentNodeId);
+      if (!node) throw new Error(`Node ${currentNodeId} not found`);
+
+      executedNodes.add(currentNodeId);
+
+      const inputs: Record<string, unknown> = {};
+      const incomingEdges = graph
+        .getEdgesForNode(currentNodeId)
+        .filter((e) => e.targetNodeId === currentNodeId);
+      for (const edge of incomingEdges) {
+        inputs[edge.targetPortId] = state.values.get(
+          `${edge.sourceNodeId}.${edge.sourcePortId}`,
+        );
+      }
+      Object.assign(inputs, node.data);
+      this.mergeNodeOverrides(currentNodeId, inputs);
+
+      this.broadcast("nodeStart", {
+        nodeId: currentNodeId,
+        nodeType: node.type,
+        label: node.metadata?.label,
+        inputs: this.serializeValue(inputs),
+        index: stepCount,
+        total: maxSteps,
+        predecessors: graph.getPredecessors(currentNodeId).map((n) => n.id),
+        successors: graph.getSuccessors(currentNodeId).map((n) => n.id),
+        isConditionalSource: wc.conditionalEdges.some(
+          (e) => e.sourceNodeId === currentNodeId,
+        ),
+      });
+
+      if (this.debugMode) {
+        this.broadcast("executionPaused", { nodeId: currentNodeId });
+        await new Promise<void>((resolve) => {
+          this.stepResolve = resolve;
+        });
+        if (this.cancelled) {
+          this.broadcast("nodeSkipped", { nodeId: currentNodeId });
+          break;
+        }
+        this.broadcast("executionResumed", { nodeId: currentNodeId });
+      }
+
+      const startTime = performance.now();
+
+      try {
+        const offStream = this.attachStreamHandler(graph, currentNodeId);
+
+        const context: ExecutionContext = {
+          graph,
+          nodeId: currentNodeId,
+          state,
+          config: node.data,
+        };
+        const middlewares = (graph as any).getMiddlewares?.() || [];
+        await this.runWithMiddlewares(
+          middlewares,
+          context,
+          node,
+          inputs,
+          state,
+        );
+
+        offStream();
+
+        const duration = performance.now() - startTime;
+        const outputs: Record<string, unknown> = {};
+        for (const [key, value] of state.values.entries()) {
+          if (key.startsWith(`${currentNodeId}.`)) {
+            outputs[key.split(".")[1]] = value;
+          }
+        }
+
+        this.broadcast("nodeComplete", {
+          nodeId: currentNodeId,
+          duration,
+          outputs: this.serializeValue(outputs),
+        });
+      } catch (error) {
+        this.broadcast("nodeError", {
+          nodeId: currentNodeId,
+          error: String(error),
+        });
+        throw error;
+      }
+
+      // Determine next node: check conditional edges, then regular edges
+      const condFn = condFns?.get(currentNodeId);
+      if (condFn) {
+        const nextNodeId = condFn(state);
+        this.broadcast("workflowConditionEval", {
+          sourceNodeId: currentNodeId,
+          targetNodeId: nextNodeId,
+        });
+        currentNodeId = nextNodeId;
+      } else {
+        const outgoing = graph
+          .getEdgesForNode(currentNodeId)
+          .filter((e) => e.sourceNodeId === currentNodeId);
+        if (!outgoing.length) {
+          throw new Error(`No outgoing edges from ${currentNodeId}`);
+        }
+        currentNodeId = outgoing[0].targetNodeId;
+      }
+    }
+
+    this.broadcast("graphComplete", {
+      success: !this.cancelled,
+      summary: this.cancelled
+        ? "Execution cancelled"
+        : "Workflow completed successfully",
+      totalNodes: executedNodes.size,
+      steps: stepCount,
+    });
+
+    this.resolveExecution(state);
+  }
+
+  private async runLinearExecution(
+    graph: Graph,
+    initialState?: GraphState,
+  ): Promise<void> {
     const state: GraphState = initialState || {
       values: new Map(),
       messages: [],
@@ -253,6 +502,7 @@ export class WebUIExecutionEngine {
         );
       }
       Object.assign(inputs, node.data);
+      this.mergeNodeOverrides(nodeId, inputs);
 
       this.broadcast("nodeStart", {
         nodeId,
@@ -342,6 +592,17 @@ export class WebUIExecutionEngine {
     };
     graph.on("llmStreamChunk", handler);
     return () => graph.off("llmStreamChunk", handler);
+  }
+
+  private mergeNodeOverrides(nodeId: string, inputs: Record<string, unknown>): void {
+    const overrides = this.nodeInputOverrides.get(nodeId);
+    if (overrides) {
+      for (const [key, value] of Object.entries(overrides)) {
+        if (value !== undefined && value !== "") {
+          inputs[key] = value;
+        }
+      }
+    }
   }
 
   private serializeValue(

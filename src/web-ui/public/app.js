@@ -63,6 +63,9 @@ const state = {
   selectedNodeId: null,
   groups: [],
   collapsedGroups: new Set(),
+  workflow: null,
+  conditionalSources: new Set(),
+  nodeInputValues: {},
 };
 
 const streamEntries = {};
@@ -423,11 +426,17 @@ function redrawCanvas() {
     const tgt = layout.positions[edge.targetNodeId];
     if (!src || !tgt) return;
 
+    const isConditional = state.conditionalSources?.has(edge.sourceNodeId);
     const key = edge.sourceNodeId + '|' + edge.targetNodeId;
     const points = layout.edgePoints[key];
     const isActive = state.nodeStatus[edge.sourceNodeId] === 'completed';
-    ctx.strokeStyle = isActive ? '#6282ff' : '#444';
-    ctx.lineWidth = isActive ? 2 : 1.5;
+    ctx.strokeStyle = isConditional ? '#f59e0b' : (isActive ? '#6282ff' : '#444');
+    ctx.lineWidth = isConditional ? 1.5 : (isActive ? 2 : 1.5);
+    if (isConditional) {
+      ctx.setLineDash([4, 3]);
+    } else {
+      ctx.setLineDash([]);
+    }
     ctx.beginPath();
 
     if (points && points.length >= 2) {
@@ -447,14 +456,16 @@ function redrawCanvas() {
     }
 
     ctx.stroke();
+    ctx.setLineDash([]);
 
     // Arrowhead
+    const arrowColor = isConditional ? '#f59e0b' : (isActive ? '#6282ff' : '#888');
     if (points && points.length >= 2) {
       const lastP = points[points.length - 1];
       const prevP = points[points.length - 2] || lastP;
-      drawArrowhead(ctx, lastP.x, lastP.y, Math.atan2(lastP.y - prevP.y, lastP.x - prevP.x), isActive ? '#6282ff' : '#888');
+      drawArrowhead(ctx, lastP.x, lastP.y, Math.atan2(lastP.y - prevP.y, lastP.x - prevP.x), arrowColor);
     } else {
-      drawArrowhead(ctx, tgt.x, tgt.y + NODE_H / 2, Math.PI, '#888');
+      drawArrowhead(ctx, tgt.x, tgt.y + NODE_H / 2, Math.PI, arrowColor);
     }
   });
 
@@ -477,15 +488,52 @@ function redrawCanvas() {
     ctx.fillStyle = colors.fill;
     ctx.strokeStyle = colors.stroke;
     ctx.lineWidth = state.nodeStatus[node.id] === 'running' ? 2 : 1.5;
+
+    // Start node accent
+    if (node.isStartNode) {
+      ctx.strokeStyle = '#22c55e';
+      ctx.lineWidth = 2.5;
+    }
+    // End node accent
+    if (node.isEndNode) {
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 2.5;
+    }
+
     roundRect(ctx, pos.x, pos.y, NODE_W, NODE_H, 8);
     ctx.fill();
     ctx.stroke();
+
+    // Start/End badge
+    if (node.isStartNode) {
+      ctx.fillStyle = '#22c55e';
+      ctx.font = 'bold 7px -apple-system, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText('START', pos.x + 6, pos.y + 4);
+    }
+    if (node.isEndNode) {
+      ctx.fillStyle = '#ef4444';
+      ctx.font = 'bold 7px -apple-system, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'top';
+      ctx.fillText('END', pos.x + NODE_W - 6, pos.y + 4);
+    }
 
     // Status dot
     ctx.fillStyle = colors.dot;
     ctx.beginPath();
     ctx.arc(pos.x + NODE_W - 12, pos.y + 12, 4, 0, Math.PI * 2);
     ctx.fill();
+
+    // Conditional node indicator
+    if (node.isConditionalSource || state.conditionalSources?.has(node.id)) {
+      ctx.fillStyle = '#f59e0b';
+      ctx.font = 'bold 9px -apple-system, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('◈', pos.x + NODE_W - 6, pos.y + NODE_H - 4);
+    }
 
     // Label
     ctx.fillStyle = colors.text;
@@ -743,9 +791,38 @@ document.addEventListener('mouseup', () => {
   }
 });
 
+function canvasGroupHitTest(clientX, clientY) {
+  const canvas = els.graphCanvas;
+  if (!canvas) return null;
+
+  const rect = canvas.getBoundingClientRect();
+  const sx = clientX - rect.left;
+  const sy = clientY - rect.top;
+  const gx = (sx - transform.x) / transform.scale;
+  const gy = (sy - transform.y) / transform.scale;
+
+  const layout = layoutCache;
+  if (!layout || !layout.groupBounds) return null;
+
+  for (const [gid, gb] of Object.entries(layout.groupBounds)) {
+    if (!gb) continue;
+    // Check if click is within group header area (top 24px)
+    if (gx >= gb.x && gx <= gb.x + gb.w && gy >= gb.y && gy <= gb.y + 24) {
+      return gid;
+    }
+  }
+  return null;
+}
+
 // Canvas click handler
 if (els.graphCanvas) {
   els.graphCanvas.addEventListener('click', (e) => {
+    const groupId = canvasGroupHitTest(e.clientX, e.clientY);
+    if (groupId) {
+      e.stopPropagation();
+      toggleGroup(groupId);
+      return;
+    }
     const nodeId = canvasHitTest(e.clientX, e.clientY);
     if (nodeId) {
       e.stopPropagation();
@@ -811,8 +888,21 @@ function renderGraph(data) {
   state._lastGraphData = data;
   const { nodes, edges } = data;
   const groups = data.groups || [];
+  const workflow = data.workflow;
 
   state.groups = groups;
+  state.workflow = workflow;
+
+  // Merge workflow info and store data on nodes
+  if (workflow) {
+    const condSources = new Set(workflow.conditionalEdges.map(e => e.sourceNodeId));
+    nodes.forEach(n => {
+      n.isStartNode = n.id === workflow.startNode;
+      n.isEndNode = n.id === workflow.endNode;
+      n.isConditionalSource = condSources.has(n.id);
+    });
+    state.conditionalSources = condSources;
+  }
 
   layoutCache.key = null;
 
@@ -849,14 +939,109 @@ function showNodeDetails(nodeId) {
   }
   content.appendChild(infoSec);
 
+  // Editable Node Inputs section
   if (node.inputs.length > 0) {
-    const portsSec = document.createElement('div');
-    portsSec.className = 'detail-section';
-    portsSec.innerHTML = `<div class="detail-section-title">Inputs</div>`;
+    const inputSec = document.createElement('div');
+    inputSec.className = 'detail-section';
+    const header = document.createElement('div');
+    header.className = 'detail-section-title input-section-header';
+    header.textContent = 'Node Inputs';
+    inputSec.appendChild(header);
+
+    if (!state.nodeInputValues[nodeId]) {
+      state.nodeInputValues[nodeId] = {};
+    }
+
     node.inputs.forEach(p => {
-      portsSec.innerHTML += `<div class="detail-item"><span class="detail-key">${p.name}</span><span class="detail-value">${p.type}</span></div>`;
+      const row = document.createElement('div');
+      row.className = 'detail-item input-row';
+
+      const label = document.createElement('span');
+      label.className = 'detail-key input-label';
+      label.textContent = p.name;
+      label.title = p.type + (p.required ? ' (required)' : '');
+
+      const field = document.createElement(
+        p.type === 'string' && (p.id.includes('essage') || p.id.includes('rompt') || p.id.includes('ystem') || p.id.includes('ontext'))
+          ? 'textarea'
+          : 'input'
+      );
+      field.className = 'node-input-field' + (field.tagName === 'TEXTAREA' ? ' node-input-textarea' : '');
+      field.placeholder = p.type + (p.required ? ' *' : '');
+
+      if (field.tagName !== 'TEXTAREA') {
+        if (p.type === 'number') {
+          field.type = 'number';
+          field.step = 'any';
+        } else if (p.type === 'boolean') {
+          const select = document.createElement('select');
+          select.className = 'node-input-field node-input-select';
+          const noneOpt = document.createElement('option');
+          noneOpt.value = '';
+          noneOpt.textContent = '(default)';
+          select.appendChild(noneOpt);
+          const trueOpt = document.createElement('option');
+          trueOpt.value = 'true';
+          trueOpt.textContent = 'true';
+          select.appendChild(trueOpt);
+          const falseOpt = document.createElement('option');
+          falseOpt.value = 'false';
+          falseOpt.textContent = 'false';
+          select.appendChild(falseOpt);
+
+          const saved = state.nodeInputValues[nodeId][p.id];
+          const dataVal = node._data ? node._data[p.id] : undefined;
+          select.value = saved !== undefined ? String(saved) : (dataVal !== undefined ? String(dataVal) : '');
+
+          select.addEventListener('change', () => {
+            state.nodeInputValues[nodeId][p.id] = select.value === '' ? undefined : select.value === 'true';
+          });
+
+          row.appendChild(label);
+          row.appendChild(select);
+          inputSec.appendChild(row);
+          return;
+        } else {
+          field.type = 'text';
+        }
+      }
+
+      const saved = state.nodeInputValues[nodeId][p.id];
+      const dataVal = node._data ? node._data[p.id] : undefined;
+      field.value = saved !== undefined && saved !== ''
+        ? String(saved)
+        : (dataVal !== undefined && dataVal !== '' ? String(dataVal) : '');
+
+      field.addEventListener('input', () => {
+        state.nodeInputValues[nodeId][p.id] = field.value;
+      });
+
+      row.appendChild(label);
+      row.appendChild(field);
+      inputSec.appendChild(row);
     });
-    content.appendChild(portsSec);
+
+    const btnRow = document.createElement('div');
+    btnRow.className = 'input-btn-row';
+
+    const applyBtn = document.createElement('button');
+    applyBtn.className = 'btn btn-small input-apply-btn';
+    applyBtn.textContent = 'Apply Inputs';
+    applyBtn.addEventListener('click', () => applyNodeInputs(nodeId));
+    btnRow.appendChild(applyBtn);
+
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'btn btn-small input-clear-btn';
+    clearBtn.textContent = 'Clear';
+    clearBtn.addEventListener('click', () => {
+      state.nodeInputValues[nodeId] = {};
+      showNodeDetails(nodeId);
+      showToast('Inputs cleared for this node', 'info', 1500);
+    });
+    btnRow.appendChild(clearBtn);
+
+    inputSec.appendChild(btnRow);
+    content.appendChild(inputSec);
   }
 
   if (node.outputs.length > 0) {
@@ -873,7 +1058,7 @@ function showNodeDetails(nodeId) {
   if (nodeInfo && nodeInfo.inputs && Object.keys(nodeInfo.inputs).length > 0) {
     const inSec = document.createElement('div');
     inSec.className = 'detail-section';
-    inSec.innerHTML = `<div class="detail-section-title">Input Values</div>`;
+    inSec.innerHTML = `<div class="detail-section-title">Runtime Input Values</div>`;
     for (const [k, v] of Object.entries(nodeInfo.inputs)) {
       inSec.innerHTML += `<div class="detail-item"><span class="detail-key">${k}</span><span class="detail-value">${truncate(v, 200)}</span></div>`;
     }
@@ -911,6 +1096,24 @@ function showNodeDetails(nodeId) {
   }
 }
 
+async function applyNodeInputs(nodeId) {
+  const inputs = state.nodeInputValues[nodeId] || {};
+  try {
+    const resp = await fetch('/api/node-inputs', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nodeId, inputs }),
+    });
+    if (resp.ok) {
+      showToast(`Inputs applied for ${nodeId}`, 'success', 1500);
+    } else {
+      showToast('Failed to apply inputs', 'error');
+    }
+  } catch (err) {
+    showToast('Failed to apply inputs: ' + err.message, 'error');
+  }
+}
+
 function truncate(str, max) {
   if (!str) return '';
   if (str.length <= max) return str;
@@ -943,7 +1146,11 @@ function connectSSE() {
     state.streamState = {};
     updateControls();
     setStatus('Running...', 'running');
-    addLog('info', `Execution started — ${data.totalNodes} nodes`);
+    if (data.workflowStartNode) {
+      addLog('info', `Workflow execution started — start: ${data.workflowStartNode}, end: ${data.workflowEndNode}`);
+    } else {
+      addLog('info', `Execution started — ${data.totalNodes} nodes`);
+    }
     showToast('Execution started', 'info');
     state.nodeOrder.forEach(nid => updateNodeStatus(nid, 'pending'));
   });
@@ -982,6 +1189,11 @@ function connectSSE() {
     const data = JSON.parse(e.data);
     updateNodeStatus(data.nodeId, 'skipped');
     addLog('info', 'Skipped (cancelled)', data.nodeId);
+  });
+
+  evtSource.addEventListener('workflowConditionEval', (e) => {
+    const data = JSON.parse(e.data);
+    addLog('info', `◈ conditional branch: ${data.sourceNodeId} → ${data.targetNodeId}`, data.sourceNodeId);
   });
 
   evtSource.addEventListener('executionPaused', (e) => {
@@ -1124,7 +1336,10 @@ async function init() {
     const graph = data.graph;
     state.debugMode = data.debugMode;
     state.nodes = {};
-    graph.nodes.forEach(n => { state.nodes[n.id] = n; });
+    graph.nodes.forEach(n => {
+      n._data = n.data || {};
+      state.nodes[n.id] = n;
+    });
     state.edges = graph.edges;
 
     if (graph.metadata?.name) {
@@ -1135,6 +1350,18 @@ async function init() {
     els.nodeCounter.textContent = graph.nodes.length + ' nodes, ' + graph.edges.length + ' edges';
 
     renderGraph(graph);
+
+    // Load any previously saved node inputs
+    try {
+      const inputResp = await fetch('/api/node-inputs');
+      if (inputResp.ok) {
+        const savedInputs = await inputResp.json();
+        state.nodeInputValues = savedInputs || {};
+      }
+    } catch {
+      // ignore
+    }
+
     connectSSE();
   } catch (err) {
     console.error('Init error:', err);

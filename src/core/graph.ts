@@ -5,6 +5,7 @@ import type {
   GraphMetadata,
   GraphState,
   NodeTypeDefinition,
+  WorkflowConfig,
   Workflow,
   Edge as EdgeType,
   ExecutionContext,
@@ -21,6 +22,8 @@ export class GraphImpl implements Graph {
   nodes: Map<string, NodeImpl>;
   edges: Map<string, EdgeImpl>;
   metadata?: GraphMetadata;
+  workflowConfig?: WorkflowConfig;
+  workflowConditionFunctions?: Map<string, (state: GraphState) => string>;
 
   #nodeTypes = new Map<string, NodeTypeDefinition>();
   #eventHandlers = new Map<string, Array<(...args: unknown[]) => void>>();
@@ -194,7 +197,18 @@ export class GraphImpl implements Graph {
     verbose?: boolean;
     logLevel?: LogLevel;
   }): Workflow {
-    return new WorkflowImpl(this, config);
+    const workflow = new WorkflowImpl(this, config);
+    this.workflowConfig = {
+      startNode: config.startNode,
+      endNode: config.endNode,
+      conditionalEdges: [],
+      maxSteps: config.maxSteps ?? 100,
+    };
+    return workflow;
+  }
+
+  setWorkflowConfig(config: WorkflowConfig): void {
+    this.workflowConfig = config;
   }
 
   use(

@@ -261,6 +261,25 @@ const state = await engine.execute(graph);
 // Execution pauses before each node — click "Step" to advance
 ```
 
+**Workflow support:**
+
+When the graph has a configured workflow (via `graph.createWorkflow()`), the
+Web UI engine automatically detects it and uses **state-based execution**
+instead of topological sort. The engine follows the `startNode → endNode` path,
+evaluates conditional edges at runtime to determine routing, and supports loops
+(cycles) with a `maxSteps` guard.
+
+**Workflow visualization:**
+
+- **Group Container**: All workflow nodes are enclosed in a collapsible group
+  box — click the `[-]`/`[+]` toggle to collapse/expand the group.
+- **START/END Badges**: The start node displays a green `START` badge; the end
+  node displays a red `END` badge.
+- **Conditional Edges**: Edges from nodes with conditional routing are drawn as
+  **dashed amber lines** with a diamond indicator (◈) on the source node.
+- **Branch Logging**: Conditional routing decisions are logged in the debug
+  panel as `◈ conditional branch: source → target`.
+
 **Frontend features:**
 
 - **Zoom & Pan**: Scroll to zoom, click-drag on empty space to pan, or use
@@ -271,11 +290,11 @@ const state = await engine.execute(graph);
   debug panels to resize. The sidebar has a minimum width of 200px and a
   maximum of 60% of the container. The handle highlights with the accent
   color on hover and drag.
-- **SVG Graph Rendering**: Auto-layout algorithm positions nodes in a
+- **Canvas Graph Rendering**: Auto-layout algorithm (dagre) positions nodes in a
   layered left-to-right flow. Nodes are rendered as rounded rectangles with
   labels and change color based on execution state.
 - **Real-time Updates**: SSE streams node lifecycle events (start, complete,
-  error, streaming chunks) to the browser.
+  error, streaming chunks, workflow routing) to the browser.
 - **Node Inspection**: Click any node to view its ports, inputs, outputs,
   streaming content, and errors.
 
@@ -638,7 +657,8 @@ await graph.execute();
 
 The `Workflow` engine provides state-based execution with conditional routing,
 enabling complex loops and agentic logic that goes beyond a standard DAG
-(Directed Acyclic Graph).
+(Directed Acyclic Graph). Workflows integrate seamlessly with the
+`WebUIExecutionEngine` for visual debugging.
 
 ```typescript
 const workflow = graph.createWorkflow({
@@ -651,6 +671,7 @@ workflow.connect("agent-start.output", "processor.input");
 // Conditional Routing based on execution state
 workflow.addConditionalEdge({
   sourceNodeId: "processor",
+  conditionLabel: "confidence > 0.8 ? final-output : agent-start",
   condition: (state) => {
     const confidence = state.values.get("processor.confidence");
     return confidence > 0.8 ? "final-output" : "agent-start"; // Loop back if uncertain
@@ -658,6 +679,18 @@ workflow.addConditionalEdge({
 });
 
 await workflow.run();
+```
+
+When a workflow is configured on a graph, the `WebUIExecutionEngine`
+automatically uses state-based execution (following start→end paths with
+conditional routing) instead of topological sort. The frontend visualizes the
+workflow as a collapsible group container with START/END badges, dashed
+conditional edges, and real-time branch logging in the debug panel.
+
+```typescript
+const engine = new WebUIExecutionEngine({ port: 3000, debugMode: true });
+await engine.execute(graph);
+// Open http://localhost:3000 — workflow structure is shown visually
 ```
 
 ---
@@ -716,7 +749,7 @@ digraph G {
   `updateNodeData()`, `getNode()`.
 - **Edge Management**: `addEdge()`, `removeEdge()`, `getEdgesForNode()`,
   `getPredecessors()`, `getSuccessors()`.
-- **Execution & Middleware**: `execute()`, `createWorkflow()`, `use()`.
+- **Execution & Middleware**: `execute()`, `createWorkflow()`, `setWorkflowConfig()`, `use()`.
 - **Events**: `on()`, `off()`, `emit()`.
 - **Export**: `toJSON()`, `toMermaid()`, `toDOT()`.
 
